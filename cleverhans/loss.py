@@ -57,6 +57,8 @@ class Loss(object):
 
         def generate(self, x):
           return self.f(x)
+        def generate(self, x, x_t):
+          return self.f(x, x_t)
 
       attack = Wrapper(attack)
     self.model = model
@@ -82,6 +84,9 @@ class Loss(object):
     """
     raise NotImplementedError
 
+  def fprop(self, x, x_t):
+
+    raise NotImplementedError
 
 class WeightedSum(Loss):
   """
@@ -170,6 +175,45 @@ class CrossEntropy(Loss):
         for coeff, logit in safe_zip(coeffs, logits))
     return loss
 
+class SquaredError(Loss):
+
+  def __init__(self, model, attack=None,
+               adv_coeff=0.5, attack_params=None,
+               **kwargs):
+   
+    self.kwargs = kwargs
+    Loss.__init__(self, model, locals(), attack)
+    self.adv_coeff = adv_coeff
+    self.attack_params = attack_params
+
+  def fprop(self,x,x_t,**kwargs):
+    #kwargs.update(self.kwargs)
+    if self.attack is not None:
+      attack_params = copy.copy(self.attack_params)
+      if attack_params is None:
+        attack_params = {}
+      
+      x = x, self.attack.generate(x, x_t,**attack_params)
+      x_orig = x,x
+      print("shape of x in loss_fprop: ", np.shape(x))
+
+      coeffs = [1. - self.adv_coeff, self.adv_coeff]
+      if self.adv_coeff == 1.:
+        x = (x[1],)
+        x_orig = (x_orig[1])
+        coeffs = (coeffs[1],)
+    else:
+      x = tuple([x])
+      x_orig = tuple([x])
+      coeffs = [1.]
+    assert np.allclose(sum(coeffs), 1.)
+
+    recon = [self.model.get_layer(x, 'RECON') for x in x]
+    #recon = self.model.get_layer(x, 'RECON')
+    loss = sum(coeff* tf.reduce_sum(tf.squared_difference(x_orig, recon))
+      for coeff, x_orig, recon in safe_zip(coeffs, x_orig, recon))
+
+    return (loss/(tf.to_float(tf.shape(x_orig)[0])))
 
 class MixUp(Loss):
   """Mixup ( https://arxiv.org/abs/1710.09412 )
@@ -516,3 +560,5 @@ class SNNLCrossEntropy(CrossEntropy):
                            self.cos_distance)
                    for layer in self.layers]
     return cross_entropy + self.factor * tf.add_n(layers_SNNL)
+
+

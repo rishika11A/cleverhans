@@ -119,7 +119,7 @@ def mnist_tutorial_cw(train_start=0, train_end=60000, test_start=0,
 
   # Evaluate the accuracy of the MNIST model on legitimate test examples
   eval_params = {'batch_size': batch_size}
-  accuracy = model_eval(sess, x, y, preds, x_test, y_test, args=eval_params)
+  accuracy = model_eval(sess, x, y, preds, x, x_test, y_test, x_test, args=eval_params)
   assert x_test.shape[0] == test_end - test_start, x_test.shape
   print('Test accuracy on legitimate test examples: {0}'.format(accuracy))
   report.clean_train_clean_eval = accuracy
@@ -193,13 +193,13 @@ def mnist_tutorial_cw(train_start=0, train_end=60000, test_start=0,
   eval_params = {'batch_size': np.minimum(nb_classes, source_samples)}
   if targeted:
     adv_accuracy = model_eval(
-        sess, x, y, preds, adv, adv_ys, args=eval_params)
+        sess, x, y, preds, x, adv, adv_ys,adv, args=eval_params)
   else:
     if viz_enabled:
-      err = model_eval(sess, x, y, preds, adv, y_test[idxs], args=eval_params)
+      err = model_eval(sess, x, y, preds,x, adv, y_test[idxs],adv, args=eval_params)
       adv_accuracy = 1 - err
     else:
-      err = model_eval(sess, x, y, preds, adv, y_test[:source_samples],
+      err = model_eval(sess, x, y, preds, x, adv, y_test[:source_samples], adv,
                        args=eval_params)
       adv_accuracy = 1 - err
 

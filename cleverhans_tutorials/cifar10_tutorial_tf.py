@@ -22,16 +22,17 @@ from cleverhans.loss import CrossEntropy
 from cleverhans.model_zoo.all_convolutional import ModelAllConvolutional
 from cleverhans.train import train
 from cleverhans.utils import AccuracyReport, set_log_level
-from cleverhans.utils_tf import model_eval
+from cleverhans.utils_tf import model_eval_default
 
 FLAGS = flags.FLAGS
 
-NB_EPOCHS = 6
+NB_EPOCHS = 3 #6
 BATCH_SIZE = 128
 LEARNING_RATE = 0.001
 CLEAN_TRAIN = True
 BACKPROP_THROUGH_ATTACK = False
-NB_FILTERS = 64
+NB_FILTERS = 8 #64
+do_train_clean= True
 
 
 def cifar10_tutorial(train_start=0, train_end=60000, test_start=0,
@@ -98,6 +99,8 @@ def cifar10_tutorial(train_start=0, train_end=60000, test_start=0,
   x = tf.placeholder(tf.float32, shape=(None, img_rows, img_cols,
                                         nchannels))
   y = tf.placeholder(tf.float32, shape=(None, nb_classes))
+  x_t = tf.placeholder(tf.float32, shape=(None, img_rows, img_cols,
+                                        nchannels))
 
   # Train an MNIST model
   train_params = {
@@ -112,9 +115,10 @@ def cifar10_tutorial(train_start=0, train_end=60000, test_start=0,
       'clip_max': 1.
   }
   rng = np.random.RandomState([2017, 8, 30])
+  dir = 'models'
 
   def do_eval(preds, x_set, y_set, report_key, is_adv=None):
-    acc = model_eval(sess, x, y, preds, x_set, y_set, args=eval_params)
+    acc = model_eval_default(sess, x, y, preds, x_set, y_set, args=eval_params)
     setattr(report, report_key, acc)
     if is_adv is None:
       report_text = None
@@ -134,10 +138,20 @@ def cifar10_tutorial(train_start=0, train_end=60000, test_start=0,
     def evaluate():
       do_eval(preds, x_test, y_test, 'clean_train_clean_eval', False)
 
-    train(sess, loss, None, None,
-          dataset_train=dataset_train, dataset_size=dataset_size,
-          evaluate=evaluate, args=train_params, rng=rng,
-          var_list=model.get_params())
+    if(do_train_clean):
+      print("training now")
+      train(sess, loss, None, None,
+            dataset_train=dataset_train, dataset_size=dataset_size,
+            evaluate=evaluate, args=train_params, rng=rng,
+            var_list=model.get_params())
+      print("saving trained model")
+      all_saver = tf.train.Saver()
+      all_saver.save(sess, dir+'/cifar_10_model_all_conv')
+    
+    else:
+      print("loading saved model")
+      saver = tf.train.import_meta_graph(dir + '/cifar_10_model_all_conv.meta')
+      model = tf.get_default_graph()
 
     # Calculate training error
     if testing:
@@ -145,6 +159,7 @@ def cifar10_tutorial(train_start=0, train_end=60000, test_start=0,
 
     # Initialize the Fast Gradient Sign Method (FGSM) attack object and
     # graph
+    print("attacking with FGSM")
     fgsm = FastGradientMethod(model, sess=sess)
     adv_x = fgsm.generate(x, **fgsm_params)
     preds_adv = model.get_logits(adv_x)

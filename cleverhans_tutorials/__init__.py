@@ -8,6 +8,17 @@ import os
 import warnings
 
 import cleverhans
+from cleverhans.attacks import FastGradientMethod
+from cleverhans.attacks import CarliniWagnerAE
+from cleverhans.augmentation import random_horizontal_flip, random_shift
+from cleverhans.compat import flags
+from cleverhans.dataset import CIFAR10
+from cleverhans.loss import CrossEntropy
+from cleverhans.model_zoo.all_convolutional import ModelAllConvolutional
+from cleverhans.train import train
+from cleverhans.utils import AccuracyReport, set_log_level
+from cleverhans.utils_tf import model_eval_default
+from cleverhans.attacks.attack import Attack
 
 
 def check_installation(cur_file):

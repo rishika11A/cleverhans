@@ -10,8 +10,10 @@ import tensorflow as tf
 
 from cleverhans import utils
 from cleverhans.attacks.attack import Attack
+#from cleverhans.attacks.attack_ae import Attack
 from cleverhans.attacks.basic_iterative_method import BasicIterativeMethod
 from cleverhans.attacks.carlini_wagner_l2 import CarliniWagnerL2
+from cleverhans.attacks.carlini_wagner_l2_ae import CarliniWagnerAE
 from cleverhans.attacks.deep_fool import DeepFool
 from cleverhans.attacks.elastic_net_method import ElasticNetMethod
 from cleverhans.attacks.fast_feature_adversaries import FastFeatureAdversaries
@@ -34,6 +36,7 @@ from cleverhans.compat import reduce_max
 from cleverhans.compat import softmax_cross_entropy_with_logits
 from cleverhans.utils_tf import clip_eta
 from cleverhans import utils_tf
+from cleverhans import attacks_tf
 
 _logger = utils.create_logger("cleverhans.attacks")
 tf_dtype = tf.as_dtype('float32')

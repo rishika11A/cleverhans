@@ -1,0 +1,52 @@
+		
+clean images class_acc 	= 97.4%
+
+						eps = 0.3 adv_coeff = 0.5		
+-----------
+original model
+---------------
+clean images avg d          4.25
+adv images d1  				31.55												
+adv images d2  				64.77						
+adv images d2-d1  			33.22							
+noise added 				3.84								
+dist_latent_clean			7.72							
+dist_latent_adv				159.84
+class_acc for y = y_t.      6.39%
+class_acc for y = y_true    68.71%										
+
+adv trained model
+---------------
+clean images avg d 			3.98												
+adv images d1 = 			10.14															
+adv images d2 = 			76.86														
+adv images d1-d1 = 			66.69													
+noise =						2.98														
+dist_latent_clean			8.86								
+dist_latent_adv				10.31								
+class_acc for y = y_t 		3.48%
+class_acc for y = y_true	85.48%
+------------
+
+LBFGS 
+-----------
+original model
+---------------
+clean images avg d = 	3.87														
+adv images d1 = 		51.28														
+adv images d2 = 		47.43								
+adv images d2-d1 = 		-3.85							
+noise = 				16.02								
+dist_latent_clean											
+dist_latent_adv												
+
+adv trained model
+---------------
+clean images avg d = 	3.15								3.063						
+adv images d1 = 		40									18.09						
+adv images d2 = 		74.23								76.62						
+adv images d1-d2 = 		34.27								58.52						
+noise =					1								3.997						
+dist_latent_clean											8.38
+dist_latent_adv												5.36
+------------

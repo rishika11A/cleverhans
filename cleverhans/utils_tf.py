@@ -73,6 +73,8 @@ def initialize_uninitialized_global_variables(sess):
   if len(not_initialized_vars):
     sess.run(tf.variables_initializer(not_initialized_vars))
 
+#commenting out
+
 
 def train(sess, loss, x, y, X_train, Y_train, save=False,
           init_all=False, evaluate=None, feed=None, args=None,
@@ -193,8 +195,137 @@ def train(sess, loss, x, y, X_train, Y_train, save=False,
 
   return True
 
+def model_eval_ae(sess, x_orig, x_target, recon, X_test=None, X_test_target=None, x_adv = None, adv_recon = None, lat_orig = None, lat_recon = None,
+               feed=None, args = None):
+  global _model_eval_cache
+  args = _ArgsWrapper(args or {})
 
-def model_eval(sess, x, y, predictions, X_test=None, Y_test=None,
+  print("shape of X_test: ", np.shape(X_test))
+  print("shape of X_test_target: ", np.shape(X_test_target))
+  print("shape of x_adv: ", np.shape(x_adv))
+  assert args.batch_size, "Batch size was not given in args dict"
+  if X_test is None or X_test_target is None:
+    raise ValueError("X_test argument and X_test_target argument "
+                     "must be supplied.")
+
+
+  shape = np.shape(x_orig)
+  w = shape[1]
+  h = shape[2]
+  c = shape[3]
+  # Define accuracy symbolically
+  key = (recon, x_orig, x_target)
+  if x_adv is not None and lat_orig is not None and key in _model_eval_cache:
+    d1, d2, dist_diff, noise, dist_lat = _model_eval_cache[key]
+  else:
+    if x_adv is not None and lat_orig is None and key in _model_eval_cache:
+      d1, d2, dist_diff, noise = _model_eval_cache[key]
+    else:
+      if x_adv is None and lat_orig is not None and key in _model_eval_cache:
+        d1, d2, dist_diff, dist_lat = _model_eval_cache[key]
+      else:
+        if key in _model_eval_cache:
+          d1, d2, dist_diff = _model_eval_cache[key]
+        else:
+          d1 = tf.reduce_sum(tf.squared_difference(tf.reshape(recon,(tf.shape(recon)[0],w*h*c)), tf.reshape(x_orig, (tf.shape(x_orig)[0], w*h*c))),1)
+          d2 = tf.reduce_sum(tf.squared_difference(tf.reshape(recon,(tf.shape(recon)[0],w*h*c)), tf.reshape(x_target, (tf.shape(x_target)[0], w*h*c))),1)
+          dist_diff = d1-d2
+         
+
+          if(x_adv is not None and lat_orig is not None):
+            #noise = tf.sqrt(tf.reduce_sum(tf.squared_difference(tf.reshape(x_orig,(tf.shape(x_orig)[0],784)), tf.reshape(x_adv, (tf.shape(x_adv)[0],784))),1))
+            noise = reduce_sum(tf.square(x_orig - x_adv), list(range(1, len(shape))))
+            noise =   pow(noise, 0.5)
+            dist_lat = tf.reduce_sum(tf.squared_difference(lat_orig, lat_recon),1)
+            _model_eval_cache[key] = d1, d2, dist_diff,noise, dist_lat
+          else:
+            if(x_adv is not None and lat_orig is None):
+              #noise = tf.sqrt(tf.reduce_sum(tf.squared_difference(tf.reshape(x_orig,(tf.shape(x_orig)[0],784)), tf.reshape(x_adv, (tf.shape(x_adv)[0],784))),1))
+              noise = reduce_sum(tf.square(x_orig - x_adv), list(range(1, len(shape))))
+              noise = pow(noise, 0.5)
+              _model_eval_cache[key] = d1, d2, dist_diff, noise
+            else:
+              if(x_adv is None and lat_orig is not None):
+                dist_lat = tf.reduce_sum(tf.squared_difference(lat_orig, lat_recon),1)
+                _model_eval_cache[key] = d1, d2, dist_diff, dist_lat
+              else:
+                _model_eval_cache[key] = d1, d2, dist_diff
+
+
+
+  # Init result var
+  #accuracy = 0.0
+
+  avg_dist_diff = 0
+  avg_dist_orig = 0
+  avg_dist_targ = 0
+  avg_noise = 0
+  avg_dist_lat = 0
+  with sess.as_default():
+    # Compute number of batches
+    nb_batches = int(math.ceil(float(len(X_test)) / args.batch_size))
+    assert nb_batches * args.batch_size >= len(X_test)
+
+    l1 = np.shape(X_test)
+    l2 = np.shape(X_test_target)
+    X_cur = np.zeros((args.batch_size,l1[1],l1[2], l1[3]), dtype='float64')
+    X_targ_cur = np.zeros((args.batch_size,l2[1], l2[2], l2[3]),dtype='float64')
+    #X_cur = np.zeros((args.batch_size, X_test.shape[1:]),
+   #                  dtype=X_test.dtype)
+    #X_targ_cur = np.zeros((args.batch_size,X_test_target.shape[1:]),
+     #                dtype=X_test_target.dtype)
+    start, end = batch_indices(0, len(X_test), args.batch_size)
+
+    #feed_dict_1 = {x_orig: X_test[index_shuf[start:end]],
+     #                x_target: X_test_target[index_shuf[start:end]]}
+    for batch in range(nb_batches):
+      if batch % 100 == 0 and batch > 0:
+        _logger.debug("Batch " + str(batch))
+
+      # Must not use the `batch_indices` function here, because it
+      # repeats some examples.
+      # It's acceptable to repeat during training, but not eval.
+      start = batch * args.batch_size
+      end = min(len(X_test), start + args.batch_size)
+
+      # The last batch may be smaller than all others. This should not
+      # affect the accuarcy disproportionately.
+      cur_batch_size = end - start
+      #print()
+      #print("np.shape(X_test_target[start:end]: ", np.shape(X_test_target[start:end]))
+      #print("np.shape(X_targ_cur[:cur_batch_size]: ",np.shape(X_targ_cur[:cur_batch_size]))
+      X_cur[:cur_batch_size] = X_test[start:end]
+      X_targ_cur[:cur_batch_size] = X_test_target[start:end]
+      feed_dict_1 = {x_orig: X_cur, x_target: X_targ_cur}
+      if feed is not None:
+        feed_dict_1.update(feed)
+      cur_avg_dist_diff = dist_diff.eval(feed_dict=feed_dict_1)
+      cur_avg_dist_orig = d1.eval(feed_dict = feed_dict_1)
+      cur_avg_dist_targ =  d2.eval(feed_dict = feed_dict_1)
+      if(lat_orig is not None):
+        cur_avg_dist_lat = dist_lat.eval(feed_dict = feed_dict_1)
+      if x_adv is not None:
+        cur_avg_noise = noise.eval(feed_dict = feed_dict_1)
+
+      avg_dist_diff += cur_avg_dist_diff[:cur_batch_size].sum()
+      avg_dist_orig +=cur_avg_dist_orig[:cur_batch_size].sum()
+      avg_dist_targ +=cur_avg_dist_targ[:cur_batch_size].sum()
+      if lat_orig is not None:
+        avg_dist_lat +=cur_avg_dist_lat[:cur_batch_size].sum()
+      if x_adv is not None:
+        avg_noise += cur_avg_noise[:cur_batch_size].sum()
+    assert end >= len(X_test)
+
+    # Divide by number of examples to get final value
+    avg_dist_diff /= len(X_test)
+    avg_dist_orig /= len(X_test)
+    avg_dist_targ /= len(X_test)
+    avg_noise /= len(X_test)
+    avg_dist_lat /= len(X_test)
+  return avg_noise, avg_dist_orig, avg_dist_targ, avg_dist_diff, avg_dist_lat
+
+_model_eval_cache = {}
+def model_eval_full(sess, x, y, predictions, x_t, X_test=None, Y_test=None, X_target_test = None,
                feed=None, args=None):
   """
   Compute the accuracy of a TF model on some data
@@ -233,13 +364,71 @@ def model_eval(sess, x, y, predictions, X_test=None, Y_test=None,
 
   with sess.as_default():
     # Compute number of batches
-    nb_batches = int(math.ceil(float(len(X_test)) / args.batch_size))
-    assert nb_batches * args.batch_size >= len(X_test)
+    
+      feed_dict = {x: X_test, y: Y_test, x_t: X_target_test}
 
-    X_cur = np.zeros((args.batch_size,) + X_test.shape[1:],
-                     dtype=X_test.dtype)
+      if feed is not None:
+        feed_dict.update(feed)
+
+      cur_corr_preds = correct_preds.eval(feed_dict=feed_dict)
+
+      accuracy += cur_corr_preds.sum()
+
+    # Divide by number of examples to get final value
+  accuracy /= len(X_test)
+
+  return accuracy
+
+_model_eval_cache = {}
+def model_eval(sess, z, y, predictions, z_t, Z_test=None, Y_test=None, Z_target_test = None,
+               feed=None, args=None):
+  """
+  Compute the accuracy of a TF model on some data
+  :param sess: TF session to use
+  :param x: input placeholder
+  :param y: output placeholder (for labels)
+  :param predictions: model output predictions
+  :param X_test: numpy array with training inputs
+  :param Y_test: numpy array with training outputs
+  :param feed: An optional dictionary that is appended to the feeding
+           dictionary before the session runs. Can be used to feed
+           the learning phase of a Keras model for instance.
+  :param args: dict or argparse `Namespace` object.
+               Should contain `batch_size`
+  :return: a float with the accuracy value
+  """
+  global _model_eval_cache
+  args = _ArgsWrapper(args or {})
+
+  assert args.batch_size, "Batch size was not given in args dict"
+  if Z_test is None or Y_test is None:
+    raise ValueError("X_test argument and Y_test argument "
+                     "must be supplied.")
+
+  # Define accuracy symbolically
+  key = (y, predictions)
+  if key in _model_eval_cache:
+    correct_preds = _model_eval_cache[key]
+  else:
+    correct_preds = tf.equal(tf.argmax(y, axis=-1),
+                             tf.argmax(predictions, axis=-1))
+    _model_eval_cache[key] = correct_preds
+
+  # Init result var
+  accuracy = 0.0
+
+  with sess.as_default():
+    # Compute number of batches
+    nb_batches = int(math.ceil(float(len(Z_test)) / args.batch_size))
+    assert nb_batches * args.batch_size >= len(Z_test)
+
+    Z_cur = np.zeros((args.batch_size,) + Z_test.shape[1:],
+                     dtype=Z_test.dtype)
     Y_cur = np.zeros((args.batch_size,) + Y_test.shape[1:],
                      dtype=Y_test.dtype)
+    Z_targ_cur = np.zeros((args.batch_size,) + Z_test.shape[1:],
+                     dtype=Z_test.dtype)
+
     for batch in range(nb_batches):
       if batch % 100 == 0 and batch > 0:
         _logger.debug("Batch " + str(batch))
@@ -248,29 +437,113 @@ def model_eval(sess, x, y, predictions, X_test=None, Y_test=None,
       # repeats some examples.
       # It's acceptable to repeat during training, but not eval.
       start = batch * args.batch_size
-      end = min(len(X_test), start + args.batch_size)
+      end = min(len(Z_test), start + args.batch_size)
 
       # The last batch may be smaller than all others. This should not
       # affect the accuarcy disproportionately.
       cur_batch_size = end - start
-      X_cur[:cur_batch_size] = X_test[start:end]
+      Z_cur[:cur_batch_size] = Z_test[start:end]
       Y_cur[:cur_batch_size] = Y_test[start:end]
-      feed_dict = {x: X_cur, y: Y_cur}
+
+      Z_targ_cur[:cur_batch_size] = Z_target_test[start:end]
+      feed_dict = {z: Z_cur, y: Y_cur, z_t: Z_targ_cur}
+
       if feed is not None:
         feed_dict.update(feed)
       cur_corr_preds = correct_preds.eval(feed_dict=feed_dict)
 
       accuracy += cur_corr_preds[:cur_batch_size].sum()
 
-    assert end >= len(X_test)
+    assert end >= len(Z_test)
 
     # Divide by number of examples to get final value
-    accuracy /= len(X_test)
+    accuracy /= len(Z_test)
 
   return accuracy
 
 _model_eval_cache = {}
 
+def model_eval_default(sess, z, y, predictions, Z_test=None, Y_test=None, Z_target_test = None,
+               feed=None, args=None):
+  """
+  Compute the accuracy of a TF model on some data
+  :param sess: TF session to use
+  :param x: input placeholder
+  :param y: output placeholder (for labels)
+  :param predictions: model output predictions
+  :param X_test: numpy array with training inputs
+  :param Y_test: numpy array with training outputs
+  :param feed: An optional dictionary that is appended to the feeding
+           dictionary before the session runs. Can be used to feed
+           the learning phase of a Keras model for instance.
+  :param args: dict or argparse `Namespace` object.
+               Should contain `batch_size`
+  :return: a float with the accuracy value
+  """
+  global _model_eval_cache
+  args = _ArgsWrapper(args or {})
+
+  assert args.batch_size, "Batch size was not given in args dict"
+  if Z_test is None or Y_test is None:
+    raise ValueError("X_test argument and Y_test argument "
+                     "must be supplied.")
+
+  # Define accuracy symbolically
+  key = (y, predictions)
+  if key in _model_eval_cache:
+    correct_preds = _model_eval_cache[key]
+  else:
+    correct_preds = tf.equal(tf.argmax(y, axis=-1),
+                             tf.argmax(predictions, axis=-1))
+    _model_eval_cache[key] = correct_preds
+
+  # Init result var
+  accuracy = 0.0
+
+  with sess.as_default():
+    # Compute number of batches
+    nb_batches = int(math.ceil(float(len(Z_test)) / args.batch_size))
+    assert nb_batches * args.batch_size >= len(Z_test)
+
+    Z_cur = np.zeros((args.batch_size,) + Z_test.shape[1:],
+                     dtype=Z_test.dtype)
+    Y_cur = np.zeros((args.batch_size,) + Y_test.shape[1:],
+                     dtype=Y_test.dtype)
+  
+
+    for batch in range(nb_batches):
+      if batch % 100 == 0 and batch > 0:
+        _logger.debug("Batch " + str(batch))
+
+      # Must not use the `batch_indices` function here, because it
+      # repeats some examples.
+      # It's acceptable to repeat during training, but not eval.
+      start = batch * args.batch_size
+      end = min(len(Z_test), start + args.batch_size)
+
+      # The last batch may be smaller than all others. This should not
+      # affect the accuarcy disproportionately.
+      cur_batch_size = end - start
+      Z_cur[:cur_batch_size] = Z_test[start:end]
+      Y_cur[:cur_batch_size] = Y_test[start:end]
+
+     
+      feed_dict = {z: Z_cur, y: Y_cur}
+
+      if feed is not None:
+        feed_dict.update(feed)
+      cur_corr_preds = correct_preds.eval(feed_dict=feed_dict)
+
+      accuracy += cur_corr_preds[:cur_batch_size].sum()
+
+    assert end >= len(Z_test)
+
+    # Divide by number of examples to get final value
+    accuracy /= len(Z_test)
+
+  return accuracy
+
+_model_eval_cache = {}
 
 def tf_model_load(sess, file_path=None):
   """
@@ -391,7 +664,7 @@ def clip_eta(eta, ord, eps):
     factor = tf.minimum(1., div(eps, norm))
     eta = eta * factor
   return eta
-
+'''
 
 def model_train(sess, x, y, predictions, X_train, Y_train, save=False,
                 predictions_adv=None, init_all=True, evaluate=None,
@@ -499,7 +772,7 @@ def model_train(sess, x, y, predictions, X_train, Y_train, save=False,
 
   return True
 
-
+'''
 def infer_devices(devices=None):
   """
   Returns the list of devices that multi-replica code should use.
@@ -682,6 +955,7 @@ def jacobian_augmentation(sess,
                 (should be generated using utils_tf.jacobian_graph)
   :return: augmented substitute data (will need to be labeled by oracle)
   """
+  print("in jacobian_augmentation")
   assert len(x.get_shape()) == len(np.shape(X_sub_prev))
   assert len(grads) >= np.max(Y_sub) + 1
   assert len(X_sub_prev) == len(Y_sub)
@@ -715,3 +989,4 @@ def jacobian_augmentation(sess,
 
   # Return augmented training data (needs to be labeled afterwards)
   return X_sub
+  

@@ -1,7 +1,5 @@
 """
 Multi-replica synchronous training
-
-
 NOTE: This module is much more free to change than many other modules
 in CleverHans. CleverHans is very conservative about changes to any
 code that affects the output of benchmark tests (attacks, evaluation
@@ -285,7 +283,6 @@ def avg_grads(tower_grads):
   Returns:
      List of pairs of (gradient, variable) where the gradient has been
      averaged across all towers.
-
   Modified from this tutorial: https://tinyurl.com/n3jr2vm
   """
   if len(tower_grads) == 1:

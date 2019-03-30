@@ -82,7 +82,6 @@ class Attack(object):
     method should be overriden in any child class that implements an
     attack that is expressable symbolically. Otherwise, it will wrap the
     numerical implementation as a symbolic operator.
-
     :param x: The model's symbolic inputs.
     :param **kwargs: optional parameters used by child classes.
       Each child class defines additional parameters as needed.
@@ -113,7 +112,6 @@ class Attack(object):
   def construct_graph(self, fixed, feedable, x_val, hash_key):
     """
     Construct the graph required to run the attack through generate_np.
-
     :param fixed: Structural elements that require defining a new graph.
     :param feedable: Arguments that can be fed to the same graph when
                      they take different values.
@@ -169,7 +167,6 @@ class Attack(object):
     Generate adversarial examples and return them as a NumPy array.
     Sub-classes *should not* implement this method unless they must
     perform special handling of arguments.
-
     :param x_val: A NumPy array with the original inputs.
     :param **kwargs: optional parameters used by child classes.
     :return: A NumPy array holding the adversarial examples.
@@ -202,7 +199,6 @@ class Attack(object):
   def construct_variables(self, kwargs):
     """
     Construct the inputs to the attack graph to be used by generate_np.
-
     :param kwargs: Keyword arguments to generate_np.
     :return:
       Structural arguments
@@ -290,7 +286,6 @@ class Attack(object):
     """
     Take in a dictionary of parameters and applies attack-specific checks
     before saving them as attributes.
-
     :param params: a dictionary of attack-specific parameters
     :return: True when parsing was successful
     """
