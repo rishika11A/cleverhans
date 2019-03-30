@@ -34,7 +34,7 @@ from scipy.ndimage import uniform_filter, median_filter, gaussian_filter
 from cleverhans.dataset import CIFAR10
 from cleverhans.augmentation import random_horizontal_flip, random_shift
 from cleverhans.model_zoo.all_convolutional import ModelAllConvolutional
-
+from cleverhans.serial import save
 
 FLAGS = flags.FLAGS
 
@@ -44,7 +44,7 @@ NB_EPOCHS = 6
 SOURCE_SAMPLES = 10
 LEARNING_RATE = .001
 CW_LEARNING_RATE = .4
-ATTACK_ITERATIONS = 1000
+ATTACK_ITERATIONS = 1000  
 MODEL_PATH = os.path.join('models', 'mnist_cw')
 MODEL_PATH_CLS = os.path.join('models', 'mnist_cw_cl')
 TARGETED = True
@@ -52,7 +52,7 @@ adv_train = False
 binarization_defense = False
 mean_filtering = False
 NB_FILTERS = 32 #64
-
+clean_train = True
 
 def cifar10_cw_recon(train_start=0, train_end=60000, test_start=0,
                       test_end=10000, viz_enabled=VIZ_ENABLED,
@@ -119,59 +119,83 @@ def cifar10_cw_recon(train_start=0, train_end=60000, test_start=0,
   #nb_filters = 64
   nb_layers = 500
   
-  # Define TF model graph
-  model = ModelBasicAE('model', nb_layers, nb_latent_size)
-  #cl_model = ModelCls('cl_model')
-  cl_model = ModelAllConvolutional('model1', nb_classes, nb_filters,
-                                  input_shape=[32, 32, 3])
-  #preds = model.get_logits(x)
-  recons = model.get_layer(x, 'RECON')
-  loss = SquaredError(model)
-  print("Defined TensorFlow model graph.")
+  def do_eval_cls(preds, x_set, y_set, x_tar_set,report_key, is_adv = None):
+    acc = model_eval(sess, x, y, preds, x_t, x_set, y_set, x_tar_set, args=eval_params_cls)
+    setattr(report, report_key, acc)
+    if is_adv is None:
+      report_text = None
+    elif is_adv:
+      report_text = 'adversarial'
+    else:
+      report_text = 'legitimate'
+    if report_text:
+      print('Test accuracy on %s examples: %0.4f' % (report_text, acc))
 
-  #loss_cls = CrossEntropy(cl_model)
-  #y_logits = cl_model.get_layer(x,'LOGITS')
-
-  y_logits = cl_model.get_logits(x)
-  loss_cls = CrossEntropy(cl_model, smoothing=label_smoothing)
+  def eval_cls():
+    do_eval_cls(y_logits, x_test, y_test, x_test,'clean_train_clean_eval', False)
 
   def evaluate():
-      do_eval(y_logits, x_test, y_test, 'clean_train_clean_eval', False)
+        do_eval(y_logits, x_test, y_test, 'clean_train_clean_eval', False)
 
-  ###########################################################################
-  # Training the model using TensorFlow
-  ###########################################################################
+  filepath_ae = "clean_model_cifar10_ae.joblib"
+  filepath_cl = "classifier_cifar10.joblib"
 
-  # Train an MNIST model
-  train_params = {
-      'nb_epochs': nb_epochs,
-      'batch_size': batch_size,
-      'learning_rate': learning_rate,
-      'filename': os.path.split(model_path)[-1]
-  }
+  if(clean_train==True):
+  # Define TF model graph
+    model = ModelBasicAE('model', nb_layers, nb_latent_size)
+    #cl_model = ModelCls('cl_model')
+    cl_model = ModelAllConvolutional('model1', nb_classes, nb_filters,
+                                    input_shape=[32, 32, 3])
+    #preds = model.get_logits(x)
+    recons = model.get_layer(x, 'RECON')
+    loss = SquaredError(model)
+    print("Defined TensorFlow model graph.")
+    y_logits = cl_model.get_logits(x)
+    loss_cls = CrossEntropy(cl_model, smoothing=label_smoothing)
+    ###########################################################################
+    # Training the model using TensorFlow
+    ###########################################################################
+
+    # Train an MNIST model
+    train_params = {
+        'nb_epochs': nb_epochs,
+        'batch_size': batch_size,
+        'learning_rate': learning_rate,
+        'filename': os.path.split(model_path)[-1]
+    }
+    
+    train_params_cls = {
+        'nb_epochs': 10,
+        'batch_size': batch_size,
+        'learning_rate': learning_rate
+    }
+    rng = np.random.RandomState([2017, 8, 30])
+    # check if we've trained before, and if we have, use that pre-trained model
+    #if os.path.exists(model_path + ".meta"):
+     # tf_model_load(sess, model_path)
+    #else:
+    eval_params_cls = {'batch_size': batch_size}
+    # Evaluate the accuracy of the MNIST model on legitimate test examples
+    eval_params = {'batch_size': batch_size}
+    print("Training autoencoder")
+    train_ae(sess, loss, x_train,x_train,args=train_params, rng=rng, var_list=model.get_params())
+    save(filepath_ae, model)
+    train(sess, loss_cls, None, None,
+            dataset_train=dataset_train, dataset_size=dataset_size,
+            evaluate=eval_cls, args=train_params_cls, rng=rng,
+            var_list=cl_model.get_params())
+    save(filepath_cl, cl_model)
+ 
+  else:
+    
+
+    model = load(filepath_ae)
+    cl_model = load(filepath_cl)
+
+
+  #train_cls(sess, loss_cls, x_train, y_train, evaluate = eval_cls, args = train_params_cls, rng = rng, var_list = cl_model.get_params())
+  #train_cls(sess, loss_cls, x_train, y_train, evaluate = eval_cls, args = train_params_cls, rng = rng, var_list = cl_model.get_params())
   
-  train_params_cls = {
-      'nb_epochs': 10,
-      'batch_size': batch_size,
-      'learning_rate': learning_rate
-  }
-  rng = np.random.RandomState([2017, 8, 30])
-  # check if we've trained before, and if we have, use that pre-trained model
-  #if os.path.exists(model_path + ".meta"):
-   # tf_model_load(sess, model_path)
-  #else:
-  eval_params_cls = {'batch_size': batch_size}
- 
- 
-  # Evaluate the accuracy of the MNIST model on legitimate test examples
-  eval_params = {'batch_size': batch_size}
-
-  print("Training autoencoder")
-
-  train_ae(sess, loss, x_train,x_train,args=train_params, rng=rng, var_list=model.get_params())
-  saver = tf.train.Saver()
-  saver.save(sess, model_path)
- 
   ###########################################################################
   # Craft adversarial examples using Carlini and Wagner's approach
   ###########################################################################
@@ -245,28 +269,7 @@ def cifar10_cw_recon(train_start=0, train_end=60000, test_start=0,
 
   
   
-  def do_eval_cls(preds, x_set, y_set, x_tar_set,report_key, is_adv = None):
-    acc = model_eval(sess, x, y, preds, x_t, x_set, y_set, x_tar_set, args=eval_params_cls)
-    setattr(report, report_key, acc)
-    if is_adv is None:
-      report_text = None
-    elif is_adv:
-      report_text = 'adversarial'
-    else:
-      report_text = 'legitimate'
-    if report_text:
-      print('Test accuracy on %s examples: %0.4f' % (report_text, acc))
-
-  def eval_cls():
-    do_eval_cls(y_logits, x_test, y_test, x_test,'clean_train_clean_eval', False)
-
-  #train_cls(sess, loss_cls, x_train, y_train, evaluate = eval_cls, args = train_params_cls, rng = rng, var_list = cl_model.get_params())
-  #train_cls(sess, loss_cls, x_train, y_train, evaluate = eval_cls, args = train_params_cls, rng = rng, var_list = cl_model.get_params())
-  train(sess, loss_cls, None, None,
-            dataset_train=dataset_train, dataset_size=dataset_size,
-            evaluate=eval_cls, args=train_params_cls, rng=rng,
-            var_list=cl_model.get_params())
-
+  
   #saver.save(sess, model_path_cls)
 
 
