@@ -51,7 +51,7 @@ TARGETED = True
 adv_train = False
 binarization_defense = False
 mean_filtering = False
-NB_FILTERS = 32 #64
+NB_FILTERS = 8 #64
 clean_train = True
 
 def cifar10_cw_recon(train_start=0, train_end=60000, test_start=0,
@@ -165,7 +165,7 @@ def cifar10_cw_recon(train_start=0, train_end=60000, test_start=0,
     }
     
     train_params_cls = {
-        'nb_epochs': 10,
+        'nb_epochs': 3,
         'batch_size': batch_size,
         'learning_rate': learning_rate
     }
