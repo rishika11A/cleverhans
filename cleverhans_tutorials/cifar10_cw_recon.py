@@ -179,19 +179,22 @@ def cifar10_cw_recon(train_start=0, train_end=60000, test_start=0,
     eval_params = {'batch_size': batch_size}
     print("Training autoencoder")
     train_ae(sess, loss, x_train,x_train,args=train_params, rng=rng, var_list=model.get_params())
-    save(filepath_ae, model)
+    #with sess.as_default():
+     # save(filepath_ae, model)
+    print("Training CNN")
     train(sess, loss_cls, None, None,
             dataset_train=dataset_train, dataset_size=dataset_size,
             evaluate=eval_cls, args=train_params_cls, rng=rng,
             var_list=cl_model.get_params())
-    save(filepath_cl, cl_model)
- 
+    #with sess.as_default():
+     # save(filepath_cl, cl_model)
+  '''
   else:
     
 
     model = load(filepath_ae)
     cl_model = load(filepath_cl)
-
+  '''
 
   #train_cls(sess, loss_cls, x_train, y_train, evaluate = eval_cls, args = train_params_cls, rng = rng, var_list = cl_model.get_params())
   #train_cls(sess, loss_cls, x_train, y_train, evaluate = eval_cls, args = train_params_cls, rng = rng, var_list = cl_model.get_params())
