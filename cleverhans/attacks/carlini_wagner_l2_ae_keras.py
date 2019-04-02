@@ -28,10 +28,10 @@ class CarliniWagnerAE_Keras(Attack):
     """
     if not isinstance(cl_model, Model):
       wrapper_warning_logits()
-      cl_model = CallableModelWrapper(cl_model, 'logits')
+      #cl_model = CallableModelWrapper(cl_model, 'logits')
     if not isinstance(model, Model):
       wrapper_warning_logits()
-      model = CallableModelWrapper(model, 'logits')
+      #model = CallableModelWrapper(model, 'logits')
 
     super(CarliniWagnerAE_Keras, self).__init__(model, sess, dtypestr, **kwargs)
     self.cl_model = cl_model
