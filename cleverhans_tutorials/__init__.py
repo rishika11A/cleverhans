@@ -10,7 +10,7 @@ import warnings
 import cleverhans
 from cleverhans.attacks import FastGradientMethod
 from cleverhans.attacks import CarliniWagnerAE_Keras
-#from cleverhans.attacks import CaliniWagnerAE_Lat 
+from cleverhans.attacks import CarliniWagnerAE_Lat 
 from cleverhans.augmentation import random_horizontal_flip, random_shift
 from cleverhans.compat import flags
 from cleverhans.dataset import CIFAR10

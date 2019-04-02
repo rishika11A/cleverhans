@@ -44,7 +44,7 @@ class CarliniWagnerAE_Lat(Attack):
     """
     if not isinstance(cl_model, Model):
       wrapper_warning_logits()
-      cl_model = CallableModelWrapper(cl_model, 'logits')
+      #cl_model = CallableModelWrapper(cl_model, 'logits')
     if not isinstance(model, Model):
       wrapper_warning_logits()
       model = CallableModelWrapper(model, 'logits')
