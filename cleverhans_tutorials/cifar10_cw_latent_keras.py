@@ -16,7 +16,7 @@ import numpy as np
 import tensorflow as tf
 import keras
 #from cleverhans.attacks import CarliniWagnerAE
-from cleverhans.attacks import CaliniWagnerAE_Lat 
+from cleverhans.attacks import CarliniWagnerAE_Lat 
 from cleverhans.compat import flags
 from cleverhans.dataset import MNIST
 from cleverhans.loss import CrossEntropy
@@ -63,7 +63,7 @@ NB_FILTERS = 4 #64
 clean_train_ae = False
 clean_train_cl = True
 
-def cifar10_cw_recon(train_start=0, train_end=60000, test_start=0,
+def cifar10_cw_latent(train_start=0, train_end=60000, test_start=0,
                       test_end=10000, viz_enabled=VIZ_ENABLED,
                       nb_epochs=NB_EPOCHS, batch_size=BATCH_SIZE,
                       source_samples=SOURCE_SAMPLES,
@@ -165,7 +165,7 @@ def cifar10_cw_recon(train_start=0, train_end=60000, test_start=0,
     #cp_cb = ModelCheckpoint(filepath = chkpt, monitor='val_loss', verbose=1, save_best_only=True, mode='auto')
     model.fit(x_train, x_train,
                     batch_size=128,
-                    epochs=20,
+                    epochs=5,
                     verbose=1,
                     validation_data=(x_test, x_test),
                     #callbacks=[es_cb, cp_cb],
@@ -173,7 +173,7 @@ def cifar10_cw_recon(train_start=0, train_end=60000, test_start=0,
     score = model.evaluate(x_test, x_test, verbose=1)
     print(score)
     model.save(model_path_ae)
-    print('Saved trained model at %s ' % model_path)
+    print('Saved trained model at %s ' % model_path_ae)
 
   else:
     model = load_model(model_path_ae)
@@ -220,12 +220,12 @@ def cifar10_cw_recon(train_start=0, train_end=60000, test_start=0,
 
     cl_model.fit(x_lat_train, y_train,
               batch_size=90,
-              epochs= 10,
+              epochs= 2,
               validation_data=(x_test, y_test),
               shuffle=True)
     
     cl_model.save(model_path_cls)
-    print('Saved trained model at %s ' % model_path)
+    print('Saved trained model at %s ' % model_path_cls)
 
   else:
     cl_model = load_model(model_path_cls)
@@ -243,7 +243,7 @@ def cifar10_cw_recon(train_start=0, train_end=60000, test_start=0,
         ' adversarial examples')
   print("This could take some time ...")
 
-  # Instantiate a CW attack object
+  # Instantiate a CW attack Object
   cw = CarliniWagnerAE_Lat(model,cl_model, sess=sess)
 
   if viz_enabled:
@@ -673,7 +673,7 @@ def main(argv=None):
   from cleverhans_tutorials import check_installation
   check_installation(__file__)
 
-  cifar10_cw_recon(viz_enabled=FLAGS.viz_enabled,
+  cifar10_cw_latent(viz_enabled=FLAGS.viz_enabled,
                     nb_epochs=FLAGS.nb_epochs,
                     batch_size=FLAGS.batch_size,
                     source_samples=FLAGS.source_samples,

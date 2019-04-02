@@ -15,8 +15,8 @@ from cleverhans.attacks.basic_iterative_method import BasicIterativeMethod
 from cleverhans.attacks.carlini_wagner_l2 import CarliniWagnerL2
 from cleverhans.attacks.carlini_wagner_l2_ae import CarliniWagnerAE
 from cleverhans.attacks.carlini_wagner_l2_ae_keras import CarliniWagnerAE_Keras
-#from cleverhans.attacks.carlini_wagner_l2_ae_lat import CaliniWagnerAE_Lat 
-#from cleverhans.attacks.carlini_wagner_l2_ae_lat_keras import CaliniWagnerAE_Lat_Keras
+from cleverhans.attacks.carlini_wagner_l2_ae_lat import CarliniWagnerAE_Lat 
+from cleverhans.attacks.carlini_wagner_l2_ae_lat_keras import CarliniWagnerAE_Lat_Keras
 from cleverhans.attacks.deep_fool import DeepFool
 from cleverhans.attacks.elastic_net_method import ElasticNetMethod
 from cleverhans.attacks.fast_feature_adversaries import FastFeatureAdversaries

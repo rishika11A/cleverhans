@@ -61,8 +61,8 @@ adv_train = False
 binarization_defense = False
 mean_filtering = True
 NB_FILTERS = 4 #64
-clean_train_ae = True
-clean_train_cl = True
+clean_train_ae = False
+clean_train_cl = False
 
 def cifar10_cw_recon(train_start=0, train_end=60000, test_start=0,
                       test_end=10000, viz_enabled=VIZ_ENABLED,
@@ -493,7 +493,7 @@ def cifar10_cw_recon(train_start=0, train_end=60000, test_start=0,
 
     model2.fit(x_train_app, x_train_aim,
                     batch_size=128,
-                    epochs=20,
+                    epochs=40,
                     verbose=1,
                     validation_data=(x_test, x_test),
                     callbacks=[es_cb, cp_cb],
