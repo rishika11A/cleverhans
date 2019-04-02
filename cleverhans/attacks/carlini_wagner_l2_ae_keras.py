@@ -33,7 +33,7 @@ class CarliniWagnerAE_Keras(Attack):
       wrapper_warning_logits()
       model = CallableModelWrapper(model, 'logits')
 
-    super(CarliniWagnerAE, self).__init__(model, sess, dtypestr, **kwargs)
+    super(CarliniWagnerAE_Keras, self).__init__(model, sess, dtypestr, **kwargs)
     self.cl_model = cl_model
     self.feedable_kwargs = ('y', 'y_target')
 
