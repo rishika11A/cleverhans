@@ -200,9 +200,9 @@ def model_eval_ae(sess, x_orig, x_target, recon, X_test=None, X_test_target=None
   global _model_eval_cache
   args = _ArgsWrapper(args or {})
 
-  print("shape of X_test: ", np.shape(X_test))
-  print("shape of X_test_target: ", np.shape(X_test_target))
-  print("shape of x_adv: ", np.shape(x_adv))
+  #print("shape of X_test: ", np.shape(X_test))
+  #print("shape of X_test_target: ", np.shape(X_test_target))
+  #print("shape of x_adv: ", np.shape(x_adv))
   assert args.batch_size, "Batch size was not given in args dict"
   if X_test is None or X_test_target is None:
     raise ValueError("X_test argument and X_test_target argument "

@@ -19,7 +19,7 @@ _logger = utils.create_logger("cleverhans.attacks.carlini_wagner_l2")
 _logger.setLevel(logging.INFO)
 
 
-class CarliniWagnerAE(Attack):
+class CarliniWagnerAE_Lat(Attack):
   """
   This attack was originally proposed by Carlini and Wagner. It is an
   iterative attack that finds adversarial examples on many defenses that
@@ -49,7 +49,7 @@ class CarliniWagnerAE(Attack):
       wrapper_warning_logits()
       model = CallableModelWrapper(model, 'logits')
 
-    super(CarliniWagnerAE, self).__init__(model, sess, dtypestr, **kwargs)
+    super(CarliniWagnerAE_Lat, self).__init__(model, sess, dtypestr, **kwargs)
     self.cl_model = cl_model
     self.feedable_kwargs = ('y', 'y_target')
 
@@ -243,15 +243,12 @@ class CWL2(object):
 
     targimg_lat = model.get_layer(self.targimg, 'LATENT')
     # prediction BEFORE-SOFTMAX of the model
+    
     self.x_hat = model.get_layer(self.newimg, 'RECON')
     self.x_hat_lat = model.get_layer(self.newimg, 'LATENT')
-    #self.y_hat_logit = cl_model.get_layer(self.x_hat, 'LOGITS')
+    
     self.y_hat_logit = cl_model.get_layer(self.x_hat_lat, 'LOGITS')
     self.y_hat = tf.argmax(self.y_hat_logit, axis = 1)
-
-    
-    #self.y_targ_logit = cl_model.get_layer(self.targimg, 'LOGITS')
-    #self.y_targ = tf.argmax(self.y_targ_logit, axis = 1)
 
     self.y_targ_logit = cl_model.get_layer(targimg_lat, 'LOGITS')
     self.y_targ = tf.argmax(self.y_targ_logit, axis = 1)

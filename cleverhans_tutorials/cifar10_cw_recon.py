@@ -14,7 +14,7 @@ import logging
 import os
 import numpy as np
 import tensorflow as tf
-
+import keras
 from cleverhans.attacks import CarliniWagnerAE
 from cleverhans.compat import flags
 from cleverhans.dataset import MNIST
@@ -35,24 +35,34 @@ from cleverhans.dataset import CIFAR10
 from cleverhans.augmentation import random_horizontal_flip, random_shift
 from cleverhans.model_zoo.all_convolutional import ModelAllConvolutional
 from cleverhans.serial import save
+import matplotlib.pyplot as plt
+from keras.models import Sequential
+from keras.layers import Dense, Dropout, Activation, Flatten
+from keras.layers import Conv2D, MaxPooling2D
+from keras.models import load_model
+from keras.layers import Input, Dense, Conv2D, MaxPooling2D, UpSampling2D, BatchNormalization, Activation
+from keras.callbacks import EarlyStopping, ModelCheckpoint
+from keras.optimizers import Adam
+from keras.models import Model
 
 FLAGS = flags.FLAGS
 
 VIZ_ENABLED = True
 BATCH_SIZE = 90
-NB_EPOCHS = 6
+NB_EPOCHS = 15
 SOURCE_SAMPLES = 10
-LEARNING_RATE = .001
+LEARNING_RATE = .002
 CW_LEARNING_RATE = .4
-ATTACK_ITERATIONS = 1000  
+ATTACK_ITERATIONS = 500  
 MODEL_PATH = os.path.join('models', 'mnist_cw')
 MODEL_PATH_CLS = os.path.join('models', 'mnist_cw_cl')
 TARGETED = True
 adv_train = False
 binarization_defense = False
-mean_filtering = False
-NB_FILTERS = 8 #64
-clean_train = True
+mean_filtering = True
+NB_FILTERS = 4 #64
+clean_train_ae = True
+clean_train_cl = True
 
 def cifar10_cw_recon(train_start=0, train_end=60000, test_start=0,
                       test_end=10000, viz_enabled=VIZ_ENABLED,
@@ -119,6 +129,7 @@ def cifar10_cw_recon(train_start=0, train_end=60000, test_start=0,
   #nb_filters = 64
   nb_layers = 500
   
+  '''
   def do_eval_cls(preds, x_set, y_set, x_tar_set,report_key, is_adv = None):
     acc = model_eval(sess, x, y, preds, x_t, x_set, y_set, x_tar_set, args=eval_params_cls)
     setattr(report, report_key, acc)
@@ -133,61 +144,199 @@ def cifar10_cw_recon(train_start=0, train_end=60000, test_start=0,
 
   def eval_cls():
     do_eval_cls(y_logits, x_test, y_test, x_test,'clean_train_clean_eval', False)
-
+  '''
+  '''
   def evaluate():
         do_eval(y_logits, x_test, y_test, 'clean_train_clean_eval', False)
 
   filepath_ae = "clean_model_cifar10_ae.joblib"
   filepath_cl = "classifier_cifar10.joblib"
 
-  if(clean_train==True):
-  # Define TF model graph
-    model = ModelBasicAE('model', nb_layers, nb_latent_size)
-    #cl_model = ModelCls('cl_model')
-    cl_model = ModelAllConvolutional('model1', nb_classes, nb_filters,
-                                    input_shape=[32, 32, 3])
-    #preds = model.get_logits(x)
-    recons = model.get_layer(x, 'RECON')
-    loss = SquaredError(model)
-    print("Defined TensorFlow model graph.")
-    y_logits = cl_model.get_logits(x)
-    loss_cls = CrossEntropy(cl_model, smoothing=label_smoothing)
-    ###########################################################################
-    # Training the model using TensorFlow
-    ###########################################################################
+  
+# Define TF model graph
+  model = ModelBasicAE('model', nb_layers, nb_latent_size)
+  #cl_model = ModelCls('cl_model')
+  #cl_model = ModelAllConvolutional('model1', nb_classes, nb_filters,
+  #                                input_shape=[32, 32, 3])
+  #preds = model.get_logits(x)
+  recons = model.get_layer(x, 'RECON')
+  latent1_orig = model.get_layer(x, 'LATENT')
+  latent1_orig_recon = model.get_layer(recons, 'LATENT')
 
-    # Train an MNIST model
-    train_params = {
-        'nb_epochs': nb_epochs,
-        'batch_size': batch_size,
-        'learning_rate': learning_rate,
-        'filename': os.path.split(model_path)[-1]
-    }
+  loss = SquaredError(model)
+  print("Defined TensorFlow model graph.")
+  #y_logits = cl_model.get_logits(x)
+  #loss_cls = CrossEntropy(cl_model, smoothing=label_smoothing)
+  ###########################################################################
+  # Training the model using TensorFlow
+  ###########################################################################
+
+  # Train an MNIST model
+  train_params = {
+      'nb_epochs': nb_epochs,
+      'batch_size': batch_size,
+      'learning_rate': learning_rate,
+      'filename': os.path.split(model_path)[-1]
+  }
+  
+  
+  train_params_cls = {
+      'nb_epochs': 4,
+      'batch_size': batch_size,
+      'learning_rate': learning_rate
+  }
+  
+  rng = np.random.RandomState([2017, 8, 30])
+  # check if we've trained before, and if we have, use that pre-trained model
+  #if os.path.exists(model_path + ".meta"):
+   # tf_model_load(sess, model_path)
+  #else:
+  #eval_params_cls = {'batch_size': batch_size}
+  # Evaluate the accuracy of the MNIST model on legitimate test examples
+  eval_params = {'batch_size': batch_size}
+  
+  def do_eval(recons, x_orig, x_target, y_orig, y_target, report_key, is_adv=False, x_adv = None, recon_adv = False, lat_orig = None, lat_orig_recon = None):
+    noise, d_orig, d_targ, avg_dd, d_latent = model_eval_ae(sess, x, x_t, recons, x_orig, x_target, x_adv, recon_adv, lat_orig, lat_orig_recon, args = eval_params)
+    setattr(report, report_key, avg_dd)
+    if is_adv is None:
+      report_text = None
+    elif is_adv:
+      report_text = 'adversarial'
+    else:
+      report_text = 'legitimate'
+    if report_text:
+      print('Test d1 on ', report_text,  ' examples: ', d_orig)
+      print('Test d2 on ', report_text,' examples: ', d_targ)
+      print('Test distance difference on %s examples: %0.4f' % (report_text, avg_dd))
+      print('Noise added: ', noise)
+      print("dist_latent_orig_recon on ", report_text, "examples : ", d_latent)
+      print()
+
+  def evaluate_ae():
+    do_eval(recons, x_test, x_test, y_test, y_test, 'clean_train_clean_eval', False, None, None, latent1_orig, latent1_orig_recon)
+
+  print("Training autoencoder")
+  train_ae(sess, loss, x_train,x_train, evaluate = evaluate_ae, args=train_params, rng=rng, var_list=model.get_params())
+  #with sess.as_default():
+   # save(filepath_ae, model)
+  '''
+  save_dir= 'models'
+  model_name = 'cifar10_AE'
+  model_path_ae = os.path.join(save_dir, model_name)
+
+  if clean_train_ae==True:
+    input_img = Input(shape=(32, 32, 3))
+    x = Conv2D(64, (3, 3), padding='same')(input_img)
+    x = BatchNormalization()(x)
+    x = Activation('relu')(x)
+    x = MaxPooling2D((2, 2), padding='same')(x)
+    x = Conv2D(32, (3, 3), padding='same')(x)
+    x = BatchNormalization()(x)
+    x = Activation('relu')(x)
+    x = MaxPooling2D((2, 2), padding='same')(x)
+    x = Conv2D(16, (3, 3), padding='same')(x)
+    x = BatchNormalization()(x)
+    x = Activation('relu')(x)
+    encoded = MaxPooling2D((2, 2), padding='same')(x)
+
+    x = Conv2D(16, (3, 3), padding='same')(encoded)
+    x = BatchNormalization()(x)
+    x = Activation('relu')(x)
+    x = UpSampling2D((2, 2))(x)
+    x = Conv2D(32, (3, 3), padding='same')(x)
+    x = BatchNormalization()(x)
+    x = Activation('relu')(x)
+    x = UpSampling2D((2, 2))(x)
+    x = Conv2D(64, (3, 3), padding='same')(x)
+    x = BatchNormalization()(x)
+    x = Activation('relu')(x)
+    x = UpSampling2D((2, 2))(x)
+    x = Conv2D(3, (3, 3), padding='same')(x)
+    x = BatchNormalization()(x)
+    decoded = Activation('sigmoid')(x)
+
+    model = Model(input_img, decoded)
+    model.compile(optimizer='adam', loss='binary_crossentropy')
+    #es_cb = EarlyStopping(monitor='val_loss', patience=2, verbose=1, mode='auto')
+    #chkpt = saveDir + 'AutoEncoder_Cifar10_Deep_weights.{epoch:02d}-{loss:.2f}-{val_loss:.2f}.hdf5'
+    #cp_cb = ModelCheckpoint(filepath = chkpt, monitor='val_loss', verbose=1, save_best_only=True, mode='auto')
+    model.fit(x_train, x_train,
+                    batch_size=128,
+                    epochs=20,
+                    verbose=1,
+                    validation_data=(x_test, x_test),
+                    #callbacks=[es_cb, cp_cb],
+                    shuffle=True)
+    score = model.evaluate(x_test, x_test, verbose=1)
+    print(score)
+    model.save(model_path_ae)
+    print('Saved trained model at %s ' % model_path)
+
+  else:
+    model = load_model(model_path_ae)
+
+  num_classes = 10
+  save_dir= 'models'
+  model_name = 'cifar10_CNN'
+  model_path_cls = os.path.join(save_dir, model_name)
+
+  if clean_train_cl == True:
+    print("Training CNN AE")
+    cl_model = Sequential()
+    cl_model.add(Conv2D(32, (3, 3), padding='same',
+                     input_shape=x_train.shape[1:]))
+    cl_model.add(Activation('relu'))
+    cl_model.add(Conv2D(32, (3, 3)))
+    cl_model.add(Activation('relu'))
+    cl_model.add(MaxPooling2D(pool_size=(2, 2)))
+    cl_model.add(Dropout(0.25))
+
+    cl_model.add(Conv2D(64, (3, 3), padding='same'))
+    cl_model.add(Activation('relu'))
+    cl_model.add(Conv2D(64, (3, 3)))
+    cl_model.add(Activation('relu'))
+    cl_model.add(MaxPooling2D(pool_size=(2, 2)))
+    cl_model.add(Dropout(0.25))
+
+    cl_model.add(Flatten())
+    cl_model.add(Dense(512))
+    cl_model.add(Activation('relu'))
+    cl_model.add(Dropout(0.5))
+    cl_model.add(Dense(num_classes))
+    cl_model.add(Activation('softmax'))
+
+    opt = keras.optimizers.rmsprop(lr=0.0001, decay=1e-6)
+
+    # Let's train the model using RMSprop
+    cl_model.compile(loss='categorical_crossentropy',
+              optimizer=opt,
+              metrics=['accuracy'])
+
+    cl_model.fit(x_train, y_train,
+              batch_size=90,
+              epochs= 10,
+              validation_data=(x_test, y_test),
+              shuffle=True)
     
-    train_params_cls = {
-        'nb_epochs': 3,
-        'batch_size': batch_size,
-        'learning_rate': learning_rate
-    }
-    rng = np.random.RandomState([2017, 8, 30])
-    # check if we've trained before, and if we have, use that pre-trained model
-    #if os.path.exists(model_path + ".meta"):
-     # tf_model_load(sess, model_path)
-    #else:
-    eval_params_cls = {'batch_size': batch_size}
-    # Evaluate the accuracy of the MNIST model on legitimate test examples
-    eval_params = {'batch_size': batch_size}
-    print("Training autoencoder")
-    train_ae(sess, loss, x_train,x_train,args=train_params, rng=rng, var_list=model.get_params())
-    #with sess.as_default():
-     # save(filepath_ae, model)
-    print("Training CNN")
-    train(sess, loss_cls, None, None,
+    cl_model.save(model_path_cls)
+    print('Saved trained model at %s ' % model_path)
+
+  else:
+    cl_model = load_model(model_path_cls)
+
+    # Score trained model.
+  scores = cl_model.evaluate(x_test, y_test, verbose=1)
+  print('Test loss:', scores[0])
+  print('Test accuracy:', scores[1])
+
+  '''
+  train(sess, loss_cls, None, None,
             dataset_train=dataset_train, dataset_size=dataset_size,
             evaluate=eval_cls, args=train_params_cls, rng=rng,
             var_list=cl_model.get_params())
-    #with sess.as_default():
-     # save(filepath_cl, cl_model)
+  '''
+  #with sess.as_default():
+  # save(filepath_cl, cl_model)
   '''
   else:
     
@@ -270,15 +419,6 @@ def cifar10_cw_recon(train_start=0, train_end=60000, test_start=0,
     one_hot = np.zeros((nb_classes, nb_classes))
     one_hot[np.arange(nb_classes), np.arange(nb_classes)] = 1
 
-  
-  
-  
-  #saver.save(sess, model_path_cls)
-
-
-    #adv_input_y = cl_model.get_layer(adv_inputs, 'LOGITS')
-    #adv_target_y = cl_model.get_layer(adv_input_targets, 'LOGITS')
-
     
 
   adv_ys = np.array([one_hot] * source_samples,
@@ -288,7 +428,7 @@ def cifar10_cw_recon(train_start=0, train_end=60000, test_start=0,
 
   cw_params_batch_size = source_samples * (nb_classes-1)
   
-  cw_params = {'binary_search_steps': 5,
+  cw_params = {'binary_search_steps': 4,
                yname: adv_ys,
                'max_iterations': attack_iterations,
                'learning_rate': CW_LEARNING_RATE,
@@ -297,26 +437,35 @@ def cifar10_cw_recon(train_start=0, train_end=60000, test_start=0,
 
   adv = cw.generate_np(adv_inputs, adv_input_targets,
                        **cw_params)
-
+  adv = sess.run(adv)
   #print("shaep of adv: ", np.shape(adv))
+  '''
+  recons = model.get_layer(x, 'RECON')
   recon_orig = model.get_layer(adv_inputs, 'RECON')
   recon_adv = model.get_layer(adv, 'RECON')
   lat_orig = model.get_layer(x, 'LATENT')
   lat_orig_recon = model.get_layer(recons, 'LATENT')
-  pred_adv_recon = cl_model.get_logits(recon_adv)
-
+  #pred_adv_recon = cl_model.get_logits(recon_adv)
+  '''
+  recon_orig = model.predict(adv_inputs)
+  recon_adv = model.predict(adv)
   #eval_params = {'batch_size': np.minimum(nb_classes, source_samples)}
-  eval_params = {'batch_size': 90}
-  if targeted:
-    noise, d1, d2, dist_diff, avg_dist_lat = model_eval_ae(sess, x, x_t,recons, adv_inputs, adv_input_targets, adv, recon_adv,lat_orig, lat_orig_recon, args=eval_params)
-    acc_1 = model_eval(sess, x, y, pred_adv_recon, x_t, adv_inputs, adv_target_y, adv_input_targets, args=eval_params_cls)
-    acc_2 = model_eval(sess, x, y, pred_adv_recon, x_t, adv_inputs, adv_input_y, adv_input_targets, args=eval_params_cls)
-    print("noise: ", noise)
-    print("classifier acc_target: ", acc_1)
-    print("classifier acc_true: ", acc_2)
+  #eval_params = {'batch_size': 90}
+   
+  #acc_1 = model_eval(sess, x, y, pred_adv_recon, x_t, adv_inputs, adv_target_y, adv_input_targets, args=eval_params_cls)
+  #acc_2 = model_eval(sess, x, y, pred_adv_recon, x_t, adv_inputs, adv_input_y, adv_input_targets, args=eval_params_cls)
+  
+  #noise, d1, d2, dist_diff, avg_dist_lat = model_eval_ae(sess, x, x_t,recons, adv_inputs, adv_input_targets, adv, recon_adv,lat_orig, lat_orig_recon, args=eval_params)
+  shape = np.shape(adv_inputs)
+  noise = reduce_sum(np.square(adv_inputs - adv), list(range(1, len(shape))))
+  print("noise: ", noise)
+  #recon_adv = sess.run(recon_adv)
+  #recon_orig = sess.run(recon_orig)
+  scores1 = cl_model.evaluate(recon_adv, adv_input_y, verbose=1)
+  scores2 = cl_model.evaluate(recon_adv, adv_target_y, verbose = 1)
+  print("classifier acc_target: ", scores2[1])
+  print("classifier acc_true: ", scores1[1])
 
-  recon_adv = sess.run(recon_adv)
-  recon_orig = sess.run(recon_orig)
   #print("recon_adv[0]\n", recon_adv[0,:,:,0])
   curr_class = 0
   if viz_enabled:
@@ -354,8 +503,36 @@ def cifar10_cw_recon(train_start=0, train_end=60000, test_start=0,
   # Finally, block & display a grid of all the adversarial examples
   
   if viz_enabled:
-    _ = grid_visual(grid_viz_data)
-    _ = grid_visual(grid_viz_data_1)
+    #_ = grid_visual(grid_viz_data)
+    #_ = grid_visual(grid_viz_data_1)
+
+    plt.ioff()
+    figure = plt.figure()
+    figure.canvas.set_window_title('Cleverhans: Grid Visualization')
+
+    # Add the images to the plot
+    num_cols = grid_viz_data.shape[0]
+    num_rows = grid_viz_data.shape[1]
+    num_channels = grid_viz_data.shape[4]
+    for yy in range(num_rows):
+      for xx in range(num_cols):
+        figure.add_subplot(num_rows, num_cols, (xx + 1) + (yy * num_cols))
+        plt.axis('off')
+        plt.imshow(grid_viz_data[xx, yy, :, :, :])
+
+    # Draw the plot and return
+    plt.savefig('cifar10_fig1')
+    figure = plt.figure()
+    figure.canvas.set_window_title('Cleverhans: Grid Visualization')
+    for yy in range(num_rows):
+      for xx in range(num_cols):
+        figure.add_subplot(num_rows, num_cols, (xx + 1) + (yy * num_cols))
+        plt.axis('off')
+        plt.imshow(grid_viz_data_1[xx, yy, :, :, :])
+
+    # Draw the plot and return
+    plt.savefig('cifar10_fig2')
+
   
   #return report
 
@@ -414,39 +591,100 @@ def cifar10_cw_recon(train_start=0, train_end=60000, test_start=0,
     x_train_aim = np.append(x_train, adv_input_set, axis = 0)
     x_train_app = np.append(x_train, adv_set, axis = 0)
 
+    model_name = 'cifar10_AE_adv'
+    model_path_ae = os.path.join(save_dir, model_name)
+
+    input_img = Input(shape=(32, 32, 3))
+    x = Conv2D(64, (3, 3), padding='same')(input_img)
+    x = BatchNormalization()(x)
+    x = Activation('relu')(x)
+    x = MaxPooling2D((2, 2), padding='same')(x)
+    x = Conv2D(32, (3, 3), padding='same')(x)
+    x = BatchNormalization()(x)
+    x = Activation('relu')(x)
+    x = MaxPooling2D((2, 2), padding='same')(x)
+    x = Conv2D(16, (3, 3), padding='same')(x)
+    x = BatchNormalization()(x)
+    x = Activation('relu')(x)
+    encoded = MaxPooling2D((2, 2), padding='same')(x)
+
+    x = Conv2D(16, (3, 3), padding='same')(encoded)
+    x = BatchNormalization()(x)
+    x = Activation('relu')(x)
+    x = UpSampling2D((2, 2))(x)
+    x = Conv2D(32, (3, 3), padding='same')(x)
+    x = BatchNormalization()(x)
+    x = Activation('relu')(x)
+    x = UpSampling2D((2, 2))(x)
+    x = Conv2D(64, (3, 3), padding='same')(x)
+    x = BatchNormalization()(x)
+    x = Activation('relu')(x)
+    x = UpSampling2D((2, 2))(x)
+    x = Conv2D(3, (3, 3), padding='same')(x)
+    x = BatchNormalization()(x)
+    decoded = Activation('sigmoid')(x)
+
+    model2 = Model(input_img, decoded)
+    model2.compile(optimizer='adam', loss='binary_crossentropy')
+
+    model2.fit(x_train_app, x_train_aim,
+                    batch_size=128,
+                    epochs=20,
+                    verbose=1,
+                    validation_data=(x_test, x_test),
+                    callbacks=[es_cb, cp_cb],
+                    shuffle=True)
+    score = model.evaluate(x_test, x_test, verbose=1)
+    print(score)
+    model2.save(model_path_ae_adv)
+    print('Saved adv trained model at %s ' % model_path)
+
+    '''
     model_adv_trained = ModelBasicAE('model_adv_trained', nb_layers, nb_latent_size)
     recons_2 = model_adv_trained.get_layer(x, 'RECON')
     loss_2 = SquaredError(model_adv_trained) 
     train_ae(sess, loss_2, x_train_app, x_train_aim ,args=train_params, rng=rng, var_list=model_adv_trained.get_params())
     saver = tf.train.Saver()
     saver.save(sess, model_path)
+    '''
 
     cw2 = CarliniWagnerAE(model_adv_trained,cl_model, sess=sess)
 
     adv_2 = cw2.generate_np(adv_inputs, adv_input_targets,
                        **cw_params)
     
+    recon_adv= model2.predict(adv)
+    recon_orig = model2.predict(adv_inputs)
     #print("shaep of adv: ", np.shape(adv))
+    '''
     recon_orig = model_adv_trained.get_layer(adv_inputs, 'RECON')
     recon_adv = model_adv_trained.get_layer(adv_2, 'RECON')
     lat_orig = model_adv_trained.get_layer(x, 'LATENT')
     lat_orig_recon = model_adv_trained.get_layer(recons, 'LATENT')
-    pred_adv_recon = cl_model.get_logits(recon_adv)
+    '''
+    #pred_adv_recon = cl_model.get_logits(recon_adv)
 
     #eval_params = {'batch_size': np.minimum(nb_classes, source_samples)}
-    eval_params = {'batch_size': 90}
+    #eval_params = {'batch_size': 90}
     if targeted:
-      noise, d1, d2, dist_diff, avg_dist_lat = model_eval_ae(sess, x, x_t,recons, adv_inputs, adv_input_targets, adv_2, recon_adv,lat_orig, lat_orig_recon, args=eval_params)
-      acc = model_eval(sess, x, y, pred_adv_recon, x_t, adv_inputs, adv_target_y, adv_input_targets, args=eval_params_cls)
+      #noise, d1, d2, dist_diff, avg_dist_lat = model_eval_ae(sess, x, x_t,recons, adv_inputs, adv_input_targets, adv_2, recon_adv,lat_orig, lat_orig_recon, args=eval_params)
+      #acc = model_eval(sess, x, y, pred_adv_recon, x_t, adv_inputs, adv_target_y, adv_input_targets, args=eval_params_cls)
+      noise = reduce_sum(tf.square(adv_inputs - adv_2), list(range(1, len(shape))))
       print("noise: ", noise)
       #print("d1: ", d1)
       #print("d2: ", d2)
       #print("d1-d2: ", dist_diff)
       #print("Avg_dist_lat: ", avg_dist_lat)
-      print("classifier acc: ", acc)
-
+      #print("classifier acc: ", acc)
+    '''  
     recon_adv = sess.run(recon_adv)
     recon_orig = sess.run(recon_orig)
+    '''
+    scores1 = cl_model.evaluate(recon_adv, adv_input_y, verbose=1)
+    scores2 = cl_model.eval_params(recon_adv, adv_target_y, verbose = 1)
+    print("classifier acc_target: ", scores2[1])
+    print("classifier acc_true: ", scores1[1])
+
     #print("recon_adv[0]\n", recon_adv[0,:,:,0])
     curr_class = 0
     if viz_enabled:
@@ -482,10 +720,40 @@ def cifar10_cw_recon(train_start=0, train_end=60000, test_start=0,
 
     # Finally, block & display a grid of all the adversarial examples
     if viz_enabled:
-      _ = grid_visual(grid_viz_data)
-      _ = grid_visual(grid_viz_data_1)
+      #_ = grid_visual(grid_viz_data)
+      #_ = grid_visual(grid_viz_data_1)
+      plt.ioff()
+      figure = plt.figure()
+      figure.canvas.set_window_title('Cleverhans: Grid Visualization')
 
-    return report
+      # Add the images to the plot
+      num_cols = grid_viz_data.shape[0]
+      num_rows = grid_viz_data.shape[1]
+      num_channels = grid_viz_data.shape[4]
+      for yy in range(num_rows):
+        for xx in range(num_cols):
+          figure.add_subplot(num_rows, num_cols, (xx + 1) + (yy * num_cols))
+          plt.axis('off')
+
+          if num_channels == 1:
+            plt.imshow(grid_viz_data[xx, yy, :, :, 0])
+          else:
+            plt.imshow(grid_viz_data[xx, yy, :, :, :])
+
+      # Draw the plot and return
+      plt.savefig('cifar10_fig1_adv_trained')
+      figure = plt.figure()
+      figure.canvas.set_window_title('Cleverhans: Grid Visualization')
+      for yy in range(num_rows):
+        for xx in range(num_cols):
+          figure.add_subplot(num_rows, num_cols, (xx + 1) + (yy * num_cols))
+          plt.axis('off')
+          plt.imshow(grid_viz_data_1[xx, yy, :, :, :])
+
+      # Draw the plot and return
+      plt.savefig('cifar10_fig2_adv_trained')
+
+      return report
 
 #binarization defense
   if(binarization_defense == True or mean_filtering==True):
@@ -504,27 +772,39 @@ def cifar10_cw_recon(train_start=0, train_end=60000, test_start=0,
       #adv = median_filter(adv, 2)
     #print("after bin ")
     #print(adv[0])
-
+    '''
+    recons = model.get_layer(x, 'RECON')
     recon_orig = model.get_layer(adv_inputs, 'RECON')
     recon_adv = model.get_layer(adv, 'RECON')
     lat_orig = model.get_layer(x, 'LATENT')
-    lat_orig_recon = model.get_layer(recons, 'LATENT')
-    pred_adv_recon = cl_model.get_logits(recon_adv)
+    lat_orig_recon = model.get_layer(recon_orig, 'LATENT')
+    '''
+    recon_orig = model.predict(adv_inputs)
+    recon_adv = model.predict(adv)
+
+    #pred_adv_recon = cl_model.get_logits(recon_adv)
 
     #eval_params = {'batch_size': np.minimum(nb_classes, source_samples)}
     eval_params = {'batch_size': 90}
     if targeted:
-      noise, d1, d2, dist_diff, avg_dist_lat = model_eval_ae(sess, x, x_t,recons, adv_inputs, adv_input_targets, adv, recon_adv,lat_orig, lat_orig_recon, args=eval_params)
-      acc1 = model_eval(sess, x, y, pred_adv_recon, x_t, adv_inputs, adv_target_y, adv_input_targets, args=eval_params_cls)
-      acc2 = model_eval(sess, x, y, pred_adv_recon, x_t, adv_inputs, adv_input_y, adv_input_targets, args=eval_params_cls)
-      print("d1: ", d1)
-      print("d2: ", d2)
+      #noise, d1, d2, dist_diff, avg_dist_lat = model_eval_ae(sess, x, x_t,recons, adv_inputs, adv_input_targets, adv, recon_adv,lat_orig, lat_orig_recon, args=eval_params)
+      #acc1 = model_eval(sess, x, y, pred_adv_recon, x_t, adv_inputs, adv_target_y, adv_input_targets, args=eval_params_cls)
+      #acc2 = model_eval(sess, x, y, pred_adv_recon, x_t, adv_inputs, adv_input_y, adv_input_targets, args=eval_params_cls)
+      
+      #print("d1: ", d1)
+      #print("d2: ", d2)
+      noise = reduce_sum(tf.square(x_orig - x_adv), list(range(1, len(shape))))
       print("noise: ", noise)
-      print("classifier acc for target class: ", acc1)
-      print("classifier acc for true class: ", acc2)
-
+      #print("classifier acc for target class: ", acc1)
+      #print("classifier acc for true class: ", acc2)
+    '''
     recon_adv = sess.run(recon_adv)
     recon_orig = sess.run(recon_orig)
+    '''
+    scores1 = cl_model.evaluate(recon_adv, adv_input_y, verbose=1)
+    scores2 = cl_model.evalluate(recon_adv, adv_target_y, verbose = 1)
+    print("classifier acc_target: ", scores2[1])
+    print("classifier acc_true: ", scores1[1])
     #print("recon_adv[0]\n", recon_adv[0,:,:,0])
     curr_class = 0
     if viz_enabled:
@@ -544,8 +824,42 @@ def cifar10_cw_recon(train_start=0, train_end=60000, test_start=0,
                 grid_viz_data_1[i,j] = adv[i*(nb_classes-1)+j]
       sess.close()
 
-      _ = grid_visual(grid_viz_data)
-      _ = grid_visual(grid_viz_data_1)
+      #_ = grid_visual(grid_viz_data)
+      #_ = grid_visual(grid_viz_data_1)
+    plt.ioff()
+    figure = plt.figure()
+    figure.canvas.set_window_title('Cleverhans: Grid Visualization')
+
+    # Add the images to the plot
+    num_cols = grid_viz_data.shape[0]
+    num_rows = grid_viz_data.shape[1]
+    num_channels = grid_viz_data.shape[4]
+    for yy in range(num_rows):
+      for xx in range(num_cols):
+        figure.add_subplot(num_rows, num_cols, (xx + 1) + (yy* num_cols))
+        plt.axis('off')
+
+        if num_channels == 1:
+          plt.imshow(grid_viz_data[xx, yy, :, :, 0])
+        else:
+          plt.imshow(grid_viz_data[xx, yy, :, :, :])
+
+    # Draw the plot and return
+    plt.savefig('cifar10_fig1_bin')
+    figure = plt.figure()
+    figure.canvas.set_window_title('Cleverhans: Grid Visualization')
+    for yy in range(num_rows):
+      for xx in range(num_cols):
+        figure.add_subplot(num_rows, num_cols, (xx + 1) + (yy * num_cols))
+        plt.axis('off')
+
+        if num_channels == 1:
+          plt.imshow(grid_viz_data_1[xx, yy, :, :, 0])
+        else:
+          plt.imshow(grid_viz_data_1[xx, yy, :, :, :])
+
+    # Draw the plot and return
+    plt.savefig('cifar10_fig2_bin')
 
       #return report
 

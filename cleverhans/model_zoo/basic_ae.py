@@ -23,7 +23,7 @@ class ModelBasicAE(Model):
     self.n_hidden = n_hidden
     # Do a dummy run of fprop to make sure the variables are created from
     # the start
-    self.fprop(tf.placeholder(tf.float32, shape = (128, 32, 32, 3)))
+    self.fprop(tf.placeholder(tf.float32, shape = (90, 32, 32, 3)))
     # Put a reference to the params in self so that the params get pickled
     self.params = self.get_params()
 

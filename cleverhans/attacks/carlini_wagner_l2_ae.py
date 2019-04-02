@@ -44,7 +44,7 @@ class CarliniWagnerAE(Attack):
     """
     if not isinstance(cl_model, Model):
       wrapper_warning_logits()
-      cl_model = CallableModelWrapper(cl_model, 'logits')
+      #cl_model = CallableModelWrapper(cl_model, 'logits')
     if not isinstance(model, Model):
       wrapper_warning_logits()
       model = CallableModelWrapper(model, 'logits')
@@ -245,17 +245,13 @@ class CWL2(object):
     # prediction BEFORE-SOFTMAX of the model
     self.x_hat = model.get_layer(self.newimg, 'RECON')
     
-    #self.y_hat_logit = cl_model.get_layer(self.x_hat, 'LOGITS')
-    
-    self.y_hat_logit = cl_model.get_logits(self.x_hat)
+    #self.y_hat_logit = cl_model.get_logits(self.x_hat)
+    self.y_hat_logit = cl_model.predict(self.x_hat, steps=1)
     self.y_hat = tf.argmax(self.y_hat_logit, axis = 1)
 
-    
-    #self.y_targ_logit = cl_model.get_layer(self.targimg, 'LOGITS')
-    #self.y_targ = tf.argmax(self.y_targ_logit, axis = 1)
-
-    #self.y_targ_logit = cl_model.get_layer(self.targimg, 'LOGITS')
-    self.y_targ_logit = cl_model.get_logits(self.targimg)
+   
+    #self.y_targ_logit = cl_model.get_logits(self.targimg)
+    self.y_targ_logit = cl_model.predict(self.targimg, steps=1)
     self.y_targ = tf.argmax(self.y_targ_logit, axis = 1)
 
     # distance to the input data
@@ -367,7 +363,7 @@ class CWL2(object):
 
     # re-scale instances to be within range [0, 1]
     imgs = (imgs - self.clip_min) / (self.clip_max - self.clip_min)
-    imgs = np.clip(imgs, 0, 1)
+    imgs = np.clip(imgs, self.clip_min, self.clip_max)
     # now convert to [-1, 1]
     imgs = (imgs * 2) - 1
     # convert to tanh-space
@@ -471,4 +467,5 @@ class CWL2(object):
     o_bestl2 = np.array(o_bestl2)
     #print("o_bestl2: ", o_bestl2)
     #print("shape of o_bestattack: ", np.shape(o_bestattack))
+    o_bestattack = np.clip(o_bestattack, self.clip_min, self.clip_max)
     return o_bestattack
