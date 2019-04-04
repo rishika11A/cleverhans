@@ -191,8 +191,8 @@ def convert_to_pb(weight_file,input_fld='',output_fld='', model_type = None):
       net_model.load_weights(weight_file_path)
     '''
     net_model = model.load(weight_file_path)
-    print("model.outputs: ", net_model.outputs)
-    print("model.inputs: ", net_model.inputs)
+    #print("model.outputs: ", net_model.outputs)
+    #print("model.inputs: ", net_model.inputs)
     num_output = len(output_node_names_of_input_network)
     pred = [None]*num_output
     pred_node_names = [None]*num_output
@@ -342,8 +342,8 @@ class CWL2(object):
     '''
     # distance to the input data
 
-    print("model.outputs: ", model.outputs)
-    print("model.inputs: ", model.inputs)
+    #print("model.outputs: ", model.outputs)
+    #print("model.inputs: ", model.inputs)
     frozen_graph = freeze_session(K.get_session(),output_names=[out.op.name for out in model.outputs])
     tf.train.write_graph(frozen_graph, "../cleverhans_tutorials/models", "tf_model_AE.pb", as_text=False)
 
