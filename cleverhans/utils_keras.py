@@ -1,7 +1,8 @@
 """
 Model construction utilities based on keras
 """
-from tensorflow import keras
+#from tensorflow 
+import keras
 
 from .model import Model, NoSuchLayerError
 
@@ -12,6 +13,12 @@ Dense = keras.layers.Dense
 Activation = keras.layers.Activation
 Flatten = keras.layers.Flatten
 KerasModel = keras.models.Model
+BatchNormalization = keras.layers.BatchNormalization
+MaxPooling2D = keras.layers.MaxPooling2D
+UpSampling2D = keras.layers.UpSampling2D
+Dropout = keras.layers.Dropout
+Flatten = keras.layers.Flatten
+
 
 def conv_2d(filters, kernel_shape, strides, padding, input_shape=None):
   """
@@ -89,6 +96,85 @@ def cnn_model(logits=False, input_ph=None, img_rows=28, img_cols=28,
   else:
     return model
 
+def cnn_cl_model(logits=False, input_ph=None, img_rows=28, img_cols=28,
+              channels=1, nb_filters=64, nb_classes=10):
+
+  model = Sequential()
+
+  if keras.backend.image_data_format() == 'channels_first':
+    input_shape = (channels, img_rows, img_cols)
+  else:
+    assert keras.backend.image_data_format() == 'channels_last'
+    input_shape = (img_rows, img_cols, channels)
+
+  layers = [conv_2d(32,(3,3),(1,1),"same"),
+            Activation('relu'),
+            conv_2d(32,(3,3),(1,1),"same"),
+            Activation('relu'),
+            MaxPooling2D(pool_size = (2,2)),
+            Dropout(0.25),
+            conv_2d(64,(3,3),(1,1),"same"),
+            Activation('relu'),
+            conv_2d(64,(3,3),(1,1),"same"),
+            Activation('relu'),
+            MaxPooling2D(pool_size = (2,2)),
+            Dropout(0.25),
+            Flatten(),
+            Dense(512),
+            Activation('relu'),
+            Dropout(0.5),
+            Dense(10),
+            Activation('softmax')]
+
+  for layer in layers:
+    model.add(layer)
+
+  return model
+           
+def ae_model(input_ph=None, img_rows=28, img_cols=28,
+              channels=1):
+  model = Sequential()
+  if keras.backend.image_data_format() == 'channels_first':
+    input_shape = (channels, img_rows, img_cols)
+  else:
+    assert keras.backend.image_data_format() == 'channels_last'
+    input_shape = (img_rows, img_cols, channels)
+
+  layers = [conv_2d(64, (3,3),(1,1),"same",input_shape=input_shape),
+            BatchNormalization(),
+            Activation('relu'),
+            MaxPooling2D((2,2),padding = "same"),
+            conv_2d(32, (3,3),(1,1),"same"),
+            BatchNormalization(),
+            Activation('relu'),
+            MaxPooling2D((2,2),padding = "same"),
+            conv_2d(16, (3,3),(1,1),"same"),
+            BatchNormalization(),
+            Activation('relu'),
+            MaxPooling2D((2,2),padding = "same"),
+            conv_2d(16, (3,3),(1,1),"same"),
+            BatchNormalization(),
+            Activation('relu'),
+            UpSampling2D((2, 2)),
+            conv_2d(32, (3,3),(1,1),"same"),
+            BatchNormalization(),
+            Activation('relu'),
+            UpSampling2D((2,2)),
+            conv_2d(64, (3,3),(1,1),"same"),
+            BatchNormalization(),
+            Activation('relu'),
+            UpSampling2D((2,2)),
+            conv_2d(3,(3,3),(1,1),"same"),
+            BatchNormalization(),
+            Activation('sigmoid')]
+
+
+  for layer in layers:
+    model.add(layer)
+  #recon_tensor = model(input_ph)
+  #return model, recon_tensor
+  return model
+
 
 class KerasModelWrapper(Model):
   """
@@ -144,11 +230,26 @@ class KerasModelWrapper(Model):
 
     return logits_name
 
+  def _get_recons_name(self):
+    """
+    Looks for the name of the layer producing the logits.
+    :return: name of layer producing the logits
+    """
+    layer_names=self.get_layer_names()
+    recon_name = layer_names[-1]
+    print("recon_name: ", recon_name)
+    return recon_name
+
+    raise Exception("No recons layers found")
+    
+
   def get_logits(self, x):
     """
     :param x: A symbolic representation of the network input.
     :return: A symbolic representation of the logits
     """
+    
+
     logits_name = self._get_logits_name()
     logits_layer = self.get_layer(x, logits_name)
 
@@ -161,15 +262,23 @@ class KerasModelWrapper(Model):
       logits_layer = softmax_logit_layer._op.inputs[0]
 
     return logits_layer
+  def get_recon(self,x):
+    layer_names=self.get_layer_names()
+    recon_name = self._get_recons_name()
+    recon_layer = self.get_layer(x, recon_name)
 
+    return recon_layer
+    
   def get_probs(self, x):
     """
     :param x: A symbolic representation of the network input.
     :return: A symbolic representation of the probs
     """
-    name = self._get_softmax_name()
+    #name = self._get_softmax_name()
+    name = self._get_recons_name()
 
     return self.get_layer(x, name)
+    
 
   def get_layer_names(self):
     """

@@ -57,8 +57,10 @@ class Loss(object):
 
         def generate(self, x):
           return self.f(x)
+        '''
         def generate(self, x, x_t):
           return self.f(x, x_t)
+        '''
 
       attack = Wrapper(attack)
     self.model = model
@@ -84,7 +86,7 @@ class Loss(object):
     """
     raise NotImplementedError
 
-  def fprop(self, x, x_t):
+  #def fprop(self, x, x_t):
 
     raise NotImplementedError
 
@@ -208,8 +210,20 @@ class SquaredError(Loss):
       coeffs = [1.]
     assert np.allclose(sum(coeffs), 1.)
 
-    recon = [self.model.get_layer(x, 'RECON') for x in x]
+    #recon = [self.model.get_layer(x, 'RECON') for x in x]
+    #print("layer names: ",self.model.get_layer_names())
+    img_rows = img_cols = 32
+    nchannels = 3
+    x_ph=tf.placeholder(tf.float32, shape=(None, img_rows, img_cols,
+                                        nchannels))
+
+    #sess = tf.Session()
+    #recon = [sess.run(recon, {x_ph: x}) for x in x]
     #recon = self.model.get_layer(x, 'RECON')
+    recon = [self.model.get_layer(x,"activation_7") for x in x] 
+    #sess.run(recon, {x_ph: x[0]})
+    #print("recon.type, shape: ", type(recon), np.shape(recon))
+    
     loss = sum(coeff* tf.reduce_sum(tf.squared_difference(x_orig, recon))
       for coeff, x_orig, recon in safe_zip(coeffs, x_orig, recon))
 

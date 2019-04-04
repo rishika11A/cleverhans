@@ -12,6 +12,7 @@ from cleverhans.model import CallableModelWrapper, Model, wrapper_warning_logits
 from cleverhans import utils
 import tensorflow.contrib.slim as slim  
 
+
 np_dtype = np.dtype('float32')
 tf_dtype = tf.as_dtype('float32')
 
@@ -243,15 +244,15 @@ class CWL2(object):
 
     
     # prediction BEFORE-SOFTMAX of the model
-    self.x_hat = model.get_layer(self.newimg, 'RECON')
+    self.x_hat = model.get_layer(self.newimg, "activation_7")
     
-    #self.y_hat_logit = cl_model.get_logits(self.x_hat)
-    self.y_hat_logit = cl_model.predict(self.x_hat, steps=1)
+    self.y_hat_logit = cl_model.get_logits(self.x_hat)
+    #self.y_hat_logit = cl_model.predict(self.x_hat, steps=1)
     self.y_hat = tf.argmax(self.y_hat_logit, axis = 1)
 
    
-    #self.y_targ_logit = cl_model.get_logits(self.targimg)
-    self.y_targ_logit = cl_model.predict(self.targimg, steps=1)
+    self.y_targ_logit = cl_model.get_logits(self.targimg)
+    #self.y_targ_logit = cl_model.predict(self.targimg, steps=1)
     self.y_targ = tf.argmax(self.y_targ_logit, axis = 1)
 
     # distance to the input data

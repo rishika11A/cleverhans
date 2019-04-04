@@ -15,10 +15,10 @@ import os
 import numpy as np
 import tensorflow as tf
 import keras
-from cleverhans.attacks import CarliniWagnerAE_Keras
+from cleverhans.attacks import CarliniWagnerAE
 from cleverhans.compat import flags
 from cleverhans.dataset import MNIST
-from cleverhans.loss import CrossEntropy
+from cleverhans.loss import CrossEntropy, SquaredError
 from cleverhans.loss import SquaredError
 from cleverhans.utils import grid_visual, AccuracyReport
 from cleverhans.utils import set_log_level
@@ -44,12 +44,14 @@ from keras.layers import Input, Dense, Conv2D, MaxPooling2D, UpSampling2D, Batch
 from keras.callbacks import EarlyStopping, ModelCheckpoint
 from keras.optimizers import Adam
 from keras.models import Model
+from cleverhans.utils_keras import KerasModelWrapper
+from cleverhans.utils_keras import cnn_model, ae_model, cnn_cl_model
 
 FLAGS = flags.FLAGS
 
 VIZ_ENABLED = True
 BATCH_SIZE = 90
-NB_EPOCHS = 15
+NB_EPOCHS = 10
 SOURCE_SAMPLES = 10
 LEARNING_RATE = .002
 CW_LEARNING_RATE = .4
@@ -63,6 +65,9 @@ mean_filtering = True
 NB_FILTERS = 4 #64
 clean_train_ae = False
 clean_train_cl = False
+TRAIN_DIR_AE = 'train_dir_ae'
+TRAIN_DIR_CL = 'train_dir_cl'
+FILENAME = 'mnist.ckpt'
 
 def cifar10_cw_recon(train_start=0, train_end=60000, test_start=0,
                       test_end=10000, viz_enabled=VIZ_ENABLED,
@@ -75,7 +80,10 @@ def cifar10_cw_recon(train_start=0, train_end=60000, test_start=0,
                       targeted=TARGETED,
                       num_threads=None,
                       label_smoothing=0.1,
-                      nb_filters=NB_FILTERS):
+                      nb_filters=NB_FILTERS,
+                      filename = FILENAME,
+                      train_dir_ae = TRAIN_DIR_AE,
+                      train_dir_cl = TRAIN_DIR_CL):
   
   # Object used to keep track of (and return) key accuracies
   report = AccuracyReport()
@@ -123,118 +131,120 @@ def cifar10_cw_recon(train_start=0, train_end=60000, test_start=0,
                                         nchannels))
   y = tf.placeholder(tf.float32, shape=(None, nb_classes))
   y_t = tf.placeholder( tf.float32, shape=(None, nb_classes))
-  z = tf.placeholder(tf.float32, shape = (None, nb_latent_size))
-  z_t = tf.placeholder(tf.float32, shape = (None, nb_latent_size))
-
+  #z = tf.placeholder(tf.float32, shape = (None, nb_latent_size))
+  #z_t = tf.placeholder(tf.float32, shape = (None, nb_latent_size))
+  '''
   save_dir= 'models'
-  model_name = 'cifar10_AE'
+  model_name = 'cifar10_AE.h5'
   model_path_ae = os.path.join(save_dir, model_name)
+  '''
+  model_ae= ae_model(x, img_rows=img_rows, img_cols=img_cols,
+                    channels=nchannels)
+  recon = model_ae(x)
+  print("recon: ",recon)
+  print("Defined TensorFlow model graph.")
+
+  def evaluate_ae():
+    # Evaluate the accuracy of the MNIST model on legitimate test examples
+    eval_params = {'batch_size': 128}
+    noise, d1, d2, dist_diff, avg_dist_lat = model_eval_ae(sess, x, x_t,recon, x_train, x_train, args=eval_params)
+    print("reconstruction distance: ", d1)
+  
+  # Train an MNIST model
+  train_params = {
+      'nb_epochs': nb_epochs,
+      'batch_size': batch_size,
+      'learning_rate': learning_rate,
+      'train_dir': train_dir_ae,
+      'filename': filename
+  }
+  rng = np.random.RandomState([2017, 8, 30])
+  if not os.path.exists(train_dir_ae):
+    os.mkdir(train_dir_ae)
+
+  #ckpt = tf.train.get_checkpoint_state(train_dir_ae)
+  #print(train_dir_ae, ckpt)
+  #ckpt_path = False if ckpt is None else ckpt.model_checkpoint_path
+  wrap_ae = KerasModelWrapper(model_ae)
 
   if clean_train_ae==True:
-    input_img = Input(shape=(32, 32, 3))
-    x = Conv2D(64, (3, 3), padding='same')(input_img)
-    x = BatchNormalization()(x)
-    x = Activation('relu')(x)
-    x = MaxPooling2D((2, 2), padding='same')(x)
-    x = Conv2D(32, (3, 3), padding='same')(x)
-    x = BatchNormalization()(x)
-    x = Activation('relu')(x)
-    x = MaxPooling2D((2, 2), padding='same')(x)
-    x = Conv2D(16, (3, 3), padding='same')(x)
-    x = BatchNormalization()(x)
-    x = Activation('relu')(x)
-    encoded = MaxPooling2D((2, 2), padding='same')(x)
-
-    x = Conv2D(16, (3, 3), padding='same')(encoded)
-    x = BatchNormalization()(x)
-    x = Activation('relu')(x)
-    x = UpSampling2D((2, 2))(x)
-    x = Conv2D(32, (3, 3), padding='same')(x)
-    x = BatchNormalization()(x)
-    x = Activation('relu')(x)
-    x = UpSampling2D((2, 2))(x)
-    x = Conv2D(64, (3, 3), padding='same')(x)
-    x = BatchNormalization()(x)
-    x = Activation('relu')(x)
-    x = UpSampling2D((2, 2))(x)
-    x = Conv2D(3, (3, 3), padding='same')(x)
-    x = BatchNormalization()(x)
-    decoded = Activation('sigmoid')(x)
-
-    model = Model(input_img, decoded)
-    model.compile(optimizer='adam', loss='binary_crossentropy')
-    #es_cb = EarlyStopping(monitor='val_loss', patience=2, verbose=1, mode='auto')
-    #chkpt = saveDir + 'AutoEncoder_Cifar10_Deep_weights.{epoch:02d}-{loss:.2f}-{val_loss:.2f}.hdf5'
-    #cp_cb = ModelCheckpoint(filepath = chkpt, monitor='val_loss', verbose=1, save_best_only=True, mode='auto')
-    model.fit(x_train, x_train,
-                    batch_size=128,
-                    epochs=60,
-                    verbose=1,
-                    validation_data=(x_test, x_test),
-                    #callbacks=[es_cb, cp_cb],
-                    shuffle=True)
-    score = model.evaluate(x_test, x_test, verbose=1)
-    print(score)
-    model.save(model_path_ae)
-    print('Saved trained model at %s ' % model_path_ae)
+    print("Training AE")
+    loss = SquaredError(wrap_ae)
+    train_ae(sess, loss, x_train, x_train, evaluate=evaluate_ae,
+          args=train_params, rng=rng)
+    saver = tf.train.Saver()
+    saver.save(sess, "train_dir/model_ae.ckpt")
+    print("saved model")
+    
 
   else:
-    model = load_model(model_path_ae)
+    print("Loading AE")
+    saver = tf.train.Saver()
+    #print(ckpt_path)
+    saver.restore(sess, "train_dir/model_ae.ckpt")
+    print("Model loaded")
+    evaluate_ae()
 
   num_classes = 10
+  '''
   save_dir= 'models'
-  model_name = 'cifar10_CNN'
+  model_name = 'cifar10_CNN.h5'
   model_path_cls = os.path.join(save_dir, model_name)
+  '''
+  cl_model = cnn_cl_model(img_rows=img_rows, img_cols=img_cols,
+                    channels=nchannels, nb_filters=64,
+                    nb_classes=nb_classes)
+  preds_cl = cl_model(x)
 
-  if clean_train_cl == True:
-    print("Training CNN AE")
-    cl_model = Sequential()
-    cl_model.add(Conv2D(32, (3, 3), padding='same',
-                     input_shape=x_train.shape[1:]))
-    cl_model.add(Activation('relu'))
-    cl_model.add(Conv2D(32, (3, 3)))
-    cl_model.add(Activation('relu'))
-    cl_model.add(MaxPooling2D(pool_size=(2, 2)))
-    cl_model.add(Dropout(0.25))
+  def evaluate():
+    # Evaluate the accuracy of the MNIST model on legitimate test examples
+    eval_params = {'batch_size': batch_size}
+    acc = model_eval(sess, x, y, preds_cl,x_t, x_test, y_test, x_test,args=eval_params)
+    report.clean_train_clean_eval = acc
+#        assert X_test.shape[0] == test_end - test_start, X_test.shape
+    print('Test accuracy on legitimate examples: %0.4f' % acc)
 
-    cl_model.add(Conv2D(64, (3, 3), padding='same'))
-    cl_model.add(Activation('relu'))
-    cl_model.add(Conv2D(64, (3, 3)))
-    cl_model.add(Activation('relu'))
-    cl_model.add(MaxPooling2D(pool_size=(2, 2)))
-    cl_model.add(Dropout(0.25))
+  train_params = {
+      'nb_epochs': 15,
+      'batch_size': batch_size,
+      'learning_rate': learning_rate,
+      'train_dir': train_dir_cl,
+      'filename': filename
+  }
+  rng = np.random.RandomState([2017, 8, 30])
+  if not os.path.exists(train_dir_cl):
+    os.mkdir(train_dir_cl)
 
-    cl_model.add(Flatten())
-    cl_model.add(Dense(512))
-    cl_model.add(Activation('relu'))
-    cl_model.add(Dropout(0.5))
-    cl_model.add(Dense(num_classes))
-    cl_model.add(Activation('softmax'))
+  #ckpt = tf.train.get_checkpoint_state(train_dir_cl)
+  #print(train_dir_cl, ckpt)
+  #ckpt_path = False if ckpt is None else ckpt.model_checkpoint_path
+  wrap_cl = KerasModelWrapper(cl_model)
 
-    opt = keras.optimizers.rmsprop(lr=0.0001, decay=1e-6)
-
-    # Let's train the model using RMSprop
-    cl_model.compile(loss='categorical_crossentropy',
-              optimizer=opt,
-              metrics=['accuracy'])
-
-    cl_model.fit(x_train, y_train,
-              batch_size=90,
-              epochs= 20,
-              validation_data=(x_test, y_test),
-              shuffle=True)
+  if clean_train_cl == True:  
+    print("Training CNN Classifier")
+    loss_cl = CrossEntropy(wrap_cl, smoothing=label_smoothing)
+    train(sess, loss_cl, x_train, y_train, evaluate=evaluate, optimizer = tf.train.RMSPropOptimizer(learning_rate = 0.0001, decay = 1e-6),
+          args=train_params, rng=rng)
+    saver = tf.train.Saver()
+    saver.save(sess, "train_dir/model_cnn_cl.ckpt")
+    print("saved model at ", "train_dir/model_cnn_cl.ckpt")
     
-    cl_model.save(model_path_cls)
-    print('Saved trained model at %s ' % model_path)
-
   else:
-    cl_model = load_model(model_path_cls)
+    print("Loading CNN Classifier")
+    saver = tf.train.Saver()
+    #print(ckpt_path)
+    saver.restore(sess, "train_dir/model_cnn_cl.ckpt")
+    print("Model loaded")
+    evaluate()
+
 
     # Score trained model.
+  '''
   scores = cl_model.evaluate(x_test, y_test, verbose=1)
   print('Test loss:', scores[0])
   print('Test accuracy:', scores[1])
-
+  cl_model_wrap = KerasModelWrapper(cl_model)
+` '''
   ###########################################################################
   # Craft adversarial examples using Carlini and Wagner's approach
   ###########################################################################
@@ -244,7 +254,7 @@ def cifar10_cw_recon(train_start=0, train_end=60000, test_start=0,
   print("This could take some time ...")
 
   # Instantiate a CW attack object
-  cw = CarliniWagnerAE_Keras(model,cl_model, sess=sess)
+  cw = CarliniWagnerAE(wrap_ae,wrap_cl, sess=sess)
 
   if viz_enabled:
     assert source_samples == nb_classes
@@ -315,7 +325,7 @@ def cifar10_cw_recon(train_start=0, train_end=60000, test_start=0,
 
   cw_params_batch_size = source_samples * (nb_classes-1)
   
-  cw_params = {'binary_search_steps': 4,
+  cw_params = {'binary_search_steps': 1,
                yname: adv_ys,
                'max_iterations': attack_iterations,
                'learning_rate': CW_LEARNING_RATE,
@@ -326,8 +336,9 @@ def cifar10_cw_recon(train_start=0, train_end=60000, test_start=0,
                        **cw_params)
   adv = sess.run(adv)
   
-  recon_orig = model.predict(adv_inputs)
-  recon_adv = model.predict(adv)
+
+  recon_orig = model_ae.predict(adv_inputs)
+  recon_adv = model_ae.predict(adv)
   shape = np.shape(adv_inputs)
   noise = reduce_sum(np.square(adv_inputs - adv), list(range(1, len(shape))))
   print("noise: ", noise)
@@ -455,62 +466,31 @@ def cifar10_cw_recon(train_start=0, train_end=60000, test_start=0,
     x_train_aim = np.append(x_train, adv_input_set, axis = 0)
     x_train_app = np.append(x_train, adv_set, axis = 0)
 
-    model_name = 'cifar10_AE_adv'
-    model_path_ae = os.path.join(save_dir, model_name)
+    #model_name = 'cifar10_AE_adv.h5'
+    #model_path_ae = os.path.join(save_dir, model_name)
 
-    input_img = Input(shape=(32, 32, 3))
-    x = Conv2D(64, (3, 3), padding='same')(input_img)
-    x = BatchNormalization()(x)
-    x = Activation('relu')(x)
-    x = MaxPooling2D((2, 2), padding='same')(x)
-    x = Conv2D(32, (3, 3), padding='same')(x)
-    x = BatchNormalization()(x)
-    x = Activation('relu')(x)
-    x = MaxPooling2D((2, 2), padding='same')(x)
-    x = Conv2D(16, (3, 3), padding='same')(x)
-    x = BatchNormalization()(x)
-    x = Activation('relu')(x)
-    encoded = MaxPooling2D((2, 2), padding='same')(x)
+    model_ae_adv= ae_model(x, img_rows=img_rows, img_cols=img_cols, channels=nchannels)
+    recon = model_ae_adv(x)
+    wrap_ae_adv = KerasModelWrapper(model_ae_adv)
+    #print("recon: ",recon)
+    #print("Defined TensorFlow model graph.")
 
-    x = Conv2D(16, (3, 3), padding='same')(encoded)
-    x = BatchNormalization()(x)
-    x = Activation('relu')(x)
-    x = UpSampling2D((2, 2))(x)
-    x = Conv2D(32, (3, 3), padding='same')(x)
-    x = BatchNormalization()(x)
-    x = Activation('relu')(x)
-    x = UpSampling2D((2, 2))(x)
-    x = Conv2D(64, (3, 3), padding='same')(x)
-    x = BatchNormalization()(x)
-    x = Activation('relu')(x)
-    x = UpSampling2D((2, 2))(x)
-    x = Conv2D(3, (3, 3), padding='same')(x)
-    x = BatchNormalization()(x)
-    decoded = Activation('sigmoid')(x)
-
-    model2 = Model(input_img, decoded)
-    model2.compile(optimizer='adam', loss='binary_crossentropy')
-
-    model2.fit(x_train_app, x_train_aim,
-                    batch_size=128,
-                    epochs=40,
-                    verbose=1,
-                    validation_data=(x_test, x_test),
-                    callbacks=[es_cb, cp_cb],
-                    shuffle=True)
-    score = model.evaluate(x_test, x_test, verbose=1)
-    print(score)
-    model2.save(model_path_ae_adv)
-    print('Saved adv trained model at %s ' % model_path)
+    print("Training Adversarial AE")
+    loss = SquaredError(wrap_ae_adv)
+    train_ae(sess, loss_2, x_train_app, x_train_aim, evaluate=evaluate_ae,
+          args=train_params, rng=rng)
+    saver = tf.train.Saver()
+    saver.save(sess, "train_dir/model_ae_adv.ckpt")
+    print("saved model")
 
     
-    cw2 = CarliniWagnerAE_Keras(model_adv_trained,cl_model, sess=sess)
+    cw2 = CarliniWagnerAE(wrap_ae_adv,wrap_cl, sess=sess)
 
     adv_2 = cw2.generate_np(adv_inputs, adv_input_targets,
                        **cw_params)
     
-    recon_adv= model2.predict(adv)
-    recon_orig = model2.predict(adv_inputs)
+    recon_adv= model_ae_adv.predict(adv)
+    recon_orig = model_ae_adv.predict(adv_inputs)
     if targeted:
       
       noise = reduce_sum(tf.square(adv_inputs - adv_2), list(range(1, len(shape))))
@@ -600,8 +580,8 @@ def cifar10_cw_recon(train_start=0, train_end=60000, test_start=0,
       
       adv = uniform_filter(adv, 2)
      
-    recon_orig = model.predict(adv_inputs)
-    recon_adv = model.predict(adv)
+    recon_orig = model_ae.predict(adv_inputs)
+    recon_adv = model_ae.predict(adv)
 
     eval_params = {'batch_size': 90}
     if targeted:
@@ -680,7 +660,8 @@ def main(argv=None):
                     learning_rate=FLAGS.learning_rate,
                     attack_iterations=FLAGS.attack_iterations,
                     model_path=FLAGS.model_path,
-                    targeted=FLAGS.targeted, nb_filters = FLAGS.nb_filters)
+                    targeted=FLAGS.targeted, nb_filters = FLAGS.nb_filters, filename = FLAGS.filename,train_dir_ae = FLAGS.train_dir_ae,
+                    train_dir_cl = FLAGS.train_dir_cl)
 
 
 if __name__ == '__main__':
@@ -701,5 +682,11 @@ if __name__ == '__main__':
                        'Run the tutorial in targeted mode?')
   flags.DEFINE_integer('nb_filters', NB_FILTERS,
                        'Model size multiplier')
+  flags.DEFINE_string('train_dir_ae', TRAIN_DIR_AE,
+                      'Directory where to save AE model.')
+  flags.DEFINE_string('train_dir_cl', TRAIN_DIR_CL,
+                      'Directory where to save Classifier model.')
+  flags.DEFINE_string('filename', FILENAME,
+                      'filename where to save Classifier model.')
 
   tf.app.run()

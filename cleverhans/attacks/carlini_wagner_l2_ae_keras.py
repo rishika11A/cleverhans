@@ -11,6 +11,17 @@ from cleverhans.compat import reduce_sum, reduce_max
 from cleverhans.model import CallableModelWrapper, Model, wrapper_warning_logits
 from cleverhans import utils
 import tensorflow.contrib.slim as slim  
+from tensorflow import keras
+from keras.layers import Input, Dense, Conv2D, MaxPooling2D, UpSampling2D, BatchNormalization, Activation
+from keras.callbacks import EarlyStopping, ModelCheckpoint
+from keras.optimizers import Adam
+from keras.models import Model
+from keras.models import Sequential
+from keras.layers import Dense, Dropout, Activation, Flatten
+from keras.layers import Conv2D, MaxPooling2D
+from keras.models import load_model
+from tensorflow.python.framework import meta_graph
+from keras import backend as K
 
 np_dtype = np.dtype('float32')
 tf_dtype = tf.as_dtype('float32')
@@ -96,6 +107,148 @@ class CarliniWagnerAE_Keras(Attack):
 def ZERO():
   return np.asarray(0., dtype=np_dtype)
 
+def convert_to_pb(weight_file,input_fld='',output_fld='', model_type = None):
+
+    import os
+    import os.path as osp
+    from tensorflow.python.framework import graph_util
+    from tensorflow.python.framework import graph_io
+    from keras.models import load_model
+    
+
+
+    # weight_file is a .h5 keras model file
+    output_node_names_of_input_network = ["pred0"] 
+    output_node_names_of_final_network = 'output_node'
+
+    # change filename to a .pb tensorflow file
+    output_graph_name = weight_file[:-2]+'pb'
+    weight_file_path = osp.join(input_fld, weight_file)
+    '''
+    if(model_type=='AE'):
+      input_img = Input(shape=(32, 32, 3))
+      x = Conv2D(64, (3, 3), padding='same')(input_img)
+      x = BatchNormalization()(x)
+      x = Activation('relu')(x)
+      x = MaxPooling2D((2, 2), padding='same')(x)
+      x = Conv2D(32, (3, 3), padding='same')(x)
+      x = BatchNormalization()(x)
+      x = Activation('relu')(x)
+      x = MaxPooling2D((2, 2), padding='same')(x)
+      x = Conv2D(16, (3, 3), padding='same')(x)
+      x = BatchNormalization()(x)
+      x = Activation('relu')(x)
+      encoded = MaxPooling2D((2, 2), padding='same')(x)
+
+      x = Conv2D(16, (3, 3), padding='same')(encoded)
+      x = BatchNormalization()(x)
+      x = Activation('relu')(x)
+      x = UpSampling2D((2, 2))(x)
+      x = Conv2D(32, (3, 3), padding='same')(x)
+      x = BatchNormalization()(x)
+      x = Activation('relu')(x)
+      x = UpSampling2D((2, 2))(x)
+      x = Conv2D(64, (3, 3), padding='same')(x)
+      x = BatchNormalization()(x)
+      x = Activation('relu')(x)
+      x = UpSampling2D((2, 2))(x)
+      x = Conv2D(3, (3, 3), padding='same')(x)
+      x = BatchNormalization()(x)
+      decoded = Activation('sigmoid')(x)
+
+      net_model = Model(input_img, decoded)
+      net_model.load_weights(weight_file_path)
+
+    if(model_type =='Classifier'):
+      num_classes = 10
+      net_model = Sequential()
+      net_model.add(Conv2D(32, (3, 3), padding='same',
+                       input_shape=(32,32,3)))
+      net_model.add(Activation('relu'))
+      net_model.add(Conv2D(32, (3, 3)))
+      net_model.add(Activation('relu'))
+      net_model.add(MaxPooling2D(pool_size=(2, 2)))
+      net_model.add(Dropout(0.25))
+
+      net_model.add(Conv2D(64, (3, 3), padding='same'))
+      net_model.add(Activation('relu'))
+      net_model.add(Conv2D(64, (3, 3)))
+      net_model.add(Activation('relu'))
+      net_model.add(MaxPooling2D(pool_size=(2, 2)))
+      net_model.add(Dropout(0.25))
+
+      net_model.add(Flatten())
+      net_model.add(Dense(512))
+      net_model.add(Activation('relu'))
+      net_model.add(Dropout(0.5))
+      net_model.add(Dense(num_classes))
+      net_model.add(Activation('softmax'))
+
+      opt = keras.optimizers.rmsprop(lr=0.0001, decay=1e-6)
+      net_model.compile(loss='categorical_crossentropy',
+                  optimizer=opt,
+                  metrics=['accuracy'])
+      net_model.load_weights(weight_file_path)
+    '''
+    net_model = model.load(weight_file_path)
+    print("model.outputs: ", net_model.outputs)
+    print("model.inputs: ", net_model.inputs)
+    num_output = len(output_node_names_of_input_network)
+    pred = [None]*num_output
+    pred_node_names = [None]*num_output
+
+    for i in range(num_output):
+        pred_node_names[i] = output_node_names_of_final_network+str(i)
+        pred[i] = tf.identity(net_model.output[i], name=pred_node_names[i])
+
+    sess = K.get_session()
+
+    constant_graph = graph_util.convert_variables_to_constants(sess, sess.graph.as_graph_def(), pred_node_names)
+    graph_io.write_graph(constant_graph, output_fld, output_graph_name, as_text=False)
+    print('saved the constant graph (ready for inference) at: ', osp.join(output_fld, output_graph_name))
+
+    return output_fld+'/'+output_graph_name
+
+def load_graph(frozen_graph_filename):
+    # We load the protobuf file from the disk and parse it to retrieve the 
+    # unserialized graph_def
+    with tf.gfile.GFile(frozen_graph_filename, "rb") as f:
+        graph_def = tf.GraphDef()
+        graph_def.ParseFromString(f.read())
+
+    # Then, we can use again a convenient built-in function to import a graph_def into the 
+    # current default Graph
+    with tf.Graph().as_default() as graph:
+        tf.import_graph_def(
+            graph_def, 
+            input_map=None, 
+            return_elements=None, 
+            name="prefix", 
+            op_dict=None, 
+            producer_op_list=None
+        )
+
+    input_name = graph.get_operations()[0].name+':0'
+    output_name = graph.get_operations()[-1].name+':0'
+
+    return graph, input_name, output_name
+def freeze_session(session, keep_var_names=None, output_names=None, clear_devices=True):
+    
+    from tensorflow.python.framework.graph_util import convert_variables_to_constants
+    graph = session.graph
+    with graph.as_default():
+        freeze_var_names = list(set(v.op.name for v in tf.global_variables()).difference(keep_var_names or []))
+        output_names = output_names or []
+        output_names += [v.op.name for v in tf.global_variables()]
+        # Graph -> GraphDef ProtoBuf
+        input_graph_def = graph.as_graph_def()
+        if clear_devices:
+            for node in input_graph_def.node:
+                node.device = ""
+        frozen_graph = convert_variables_to_constants(session, input_graph_def,
+                                                      output_names, freeze_var_names)
+        return frozen_graph
+
 
 class CWL2(object):
   def __init__(self, sess, model,cl_model, batch_size, confidence, targeted,
@@ -117,7 +270,11 @@ class CWL2(object):
     self.model = model
     self.cl_model = cl_model
 
+    #convert model to tensorflow model
+
     
+
+
     self.repeat = binary_search_steps >= 10
 
     self.shape = shape = tuple([batch_size] + list(shape))
@@ -148,19 +305,64 @@ class CWL2(object):
     self.newimg = self.newimg * (clip_max - clip_min) + clip_min
 
     #targimg_lat = latent_layer_model.predict(self.targimg)
+    '''
+    tf_model_path_ae = convert_to_pb('cifar10_AE.h5','../cleverhans_tutorials/models','../cleverhans_tutorials/models', 'AE')
+    tf_model_path_cl = convert_to_pb('cifar10_CNN.h5','../cleverhans_tutorials/models','../cleverhans_tutorials/models', 'Classifier')
+    tf_model,tf_input,tf_output = load_graph(tf_model_path_ae)
+    tf_cl_model,tf_cl_input,tf_cl_output = load_graph(tf_model_path_cl)
     
-    
-    self.x_hat = model.predict(self.newimg, steps = 1)
-    #self.x_hat_lat = latent_layer_model.predict(self.newimg)
+    #self.x_hat = model.predict(self.newimg, steps = 1)
+    with tf.Graph().as_default() as graph1:
 
-    self.y_hat_logit = cl_model.prediction(self.x_hat, steps = 1)
-    self.y_hat = tf.argmax(self.y_hat_logit, axis = 1)
+      x_hat_output  = tf_model.get_tensor_by_name(tf_output) 
+      x_hat_input = tf_model.get_tensor_by_name(tf_input)
+      #self.x_hat_lat = latent_layer_model.predict(self.newimg)
+      #self.x_hat = graph1.run(self.x_hat, feed_dict = {x_1 : self.newimg})
+      #self.y_hat_logit = cl_model.predict(self.x_hat, steps = 1)
+    with tf.Graph().as_default() as graph2:  
+      y_hat_logit = tf_cl_model.get_tensor_by_name(tf_cl_output)
+      y_hat_logit_input = tf_cl_model.get_tensor_by_name(tf_cl_input) 
+      #self.y_hat_logit = self.sess.run(self.y_hat_logit, feed_dict = {x_2 : self.x_hat})
+      #self.y_hat_logit = cl_model.predict(self.x_hat, steps = 1)
 
-    
-    self.y_targ_logit = cl_model.predict(targimg, steps = 1)
+      y_hat_output = tf.argmax(y_hat_logit, axis = 1)
+
+    x_1 = tf.placeholder(tf.float32, (None, 32,32, 3))
+    graph = tf.get_default_graph()
+    meta_graph1 = tf.train.export_meta_graph(graph=graph1)
+    meta_graph.import_scoped_meta_graph(meta_graph1, input_map={'x_hat_input': x_1}, import_scope='graph1',
+    out1 = graph.get_tensor_by_name('graph1/tf_output:0'))
+
+    meta_graph2 = tf.train.export_meta_graph(graph=graph2)
+    meta_graph.import_scoped_meta_graph(meta_graph2, input_map={'y_hat_logit_input': out1}, import_scope='graph2')
+    #self.y_targ_logit = cl_model.predict(self.targimg, steps = 1)
+    self.y_targ_logit = tf_cl_model.get_tensor_by_name(tf_cls_output)
+    self.y_targ_logit = sess.run(self.y_targ_logit, feed_dict = {tf_cl_model.get_tensor_by_name(tf_cl_input): self.targimg})
     self.y_targ = tf.argmax(self.y_targ_logit, axis = 1)
-
+    '''
     # distance to the input data
+
+    print("model.outputs: ", model.outputs)
+    print("model.inputs: ", model.inputs)
+    frozen_graph = freeze_session(K.get_session(),output_names=[out.op.name for out in model.outputs])
+    tf.train.write_graph(frozen_graph, "../cleverhans_tutorials/models", "tf_model_AE.pb", as_text=False)
+
+    from tensorflow.python.platform import gfile
+
+    f = gfile.FastGFile("../cleverhans_tutorials/models/tf_model_AE.pb", 'rb')
+    graph_def = tf.GraphDef()
+    # Parses a serialized binary message into the current message.
+    graph_def.ParseFromString(f.read())
+    f.close()
+
+    sess.graph.as_default()
+    tf.import_graph_def(graph_def)
+    reconstruction_tensor = sess.graph.get_tensor_by_name('import/activation_7/Sigmoid:0')
+    #self.x_hat = reconstruction_tensor(self.newimg)
+
+    #self.y_hat_logit = cl_model.predict(self.x_hat, steps=1)
+    #self.y_hat = tf.argmax(self.y_hat_logit, axis = 1)
+    #self.x_hat = sess.run(reconstruction_tensor, {'import/input_1:0': self.newimg})
     self.other = (tf.tanh(self.timg) + 1) / 2
     self.other =  self.other * (clip_max - clip_min) + clip_min
     self.l2dist = reduce_sum(
@@ -171,7 +373,7 @@ class CWL2(object):
     
     epsilon = 10e-8
     
-    loss1 = reduce_sum(tf.square(self.x_hat-targimg))
+    loss1 = reduce_sum(tf.square(self.x_hat-self.targimg))
     
     # sum up the losses
     self.loss2 = reduce_sum(self.l2dist)

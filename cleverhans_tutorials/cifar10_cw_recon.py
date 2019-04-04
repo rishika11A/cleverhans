@@ -262,7 +262,7 @@ def cifar10_cw_recon(train_start=0, train_end=60000, test_start=0,
     #cp_cb = ModelCheckpoint(filepath = chkpt, monitor='val_loss', verbose=1, save_best_only=True, mode='auto')
     model.fit(x_train, x_train,
                     batch_size=128,
-                    epochs=20,
+                    epochs=2,
                     verbose=1,
                     validation_data=(x_test, x_test),
                     #callbacks=[es_cb, cp_cb],
@@ -281,7 +281,7 @@ def cifar10_cw_recon(train_start=0, train_end=60000, test_start=0,
   model_path_cls = os.path.join(save_dir, model_name)
 
   if clean_train_cl == True:
-    print("Training CNN AE")
+    print("Training CNN classifier")
     cl_model = Sequential()
     cl_model.add(Conv2D(32, (3, 3), padding='same',
                      input_shape=x_train.shape[1:]))
@@ -314,7 +314,7 @@ def cifar10_cw_recon(train_start=0, train_end=60000, test_start=0,
 
     cl_model.fit(x_train, y_train,
               batch_size=90,
-              epochs= 10,
+              epochs= 4,
               validation_data=(x_test, y_test),
               shuffle=True)
     

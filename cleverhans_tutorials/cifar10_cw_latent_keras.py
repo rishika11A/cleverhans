@@ -16,7 +16,7 @@ import numpy as np
 import tensorflow as tf
 import keras
 #from cleverhans.attacks import CarliniWagnerAE
-from cleverhans.attacks import CarliniWagnerAE_Lat 
+from cleverhans.attacks import CarliniWagnerAE_Lat_Keras 
 from cleverhans.compat import flags
 from cleverhans.dataset import MNIST
 from cleverhans.loss import CrossEntropy
@@ -61,7 +61,7 @@ binarization_defense = False
 mean_filtering = True
 NB_FILTERS = 4 #64
 clean_train_ae = False
-clean_train_cl = True
+clean_train_cl = False
 
 def cifar10_cw_latent(train_start=0, train_end=60000, test_start=0,
                       test_end=10000, viz_enabled=VIZ_ENABLED,
@@ -244,7 +244,7 @@ def cifar10_cw_latent(train_start=0, train_end=60000, test_start=0,
   print("This could take some time ...")
 
   # Instantiate a CW attack Object
-  cw = CarliniWagnerAE_Lat(model,cl_model, sess=sess)
+  cw = CarliniWagnerAE_Lat_Keras(model,cl_model, sess=sess)
 
   if viz_enabled:
     assert source_samples == nb_classes
@@ -504,7 +504,7 @@ def cifar10_cw_latent(train_start=0, train_end=60000, test_start=0,
     print('Saved adv trained model at ', model_path_ae_adv)
 
     
-    cw2 = CarliniWagnerAE(model_adv_trained,cl_model, sess=sess)
+    cw2 = CarliniWagnerAE_Lat_Keras(model_adv_trained,cl_model, sess=sess)
 
     adv_2 = cw2.generate_np(adv_inputs, adv_input_targets,
                        **cw_params)

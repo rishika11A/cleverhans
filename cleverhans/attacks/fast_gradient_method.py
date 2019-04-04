@@ -11,7 +11,6 @@ from cleverhans.attacks.attack import Attack
 from cleverhans.compat import reduce_max, reduce_sum, softmax_cross_entropy_with_logits
 from cleverhans import utils_tf
 #from cleverhans.loss import SquaredError
-
 class FastGradientMethod(Attack):
   """
   This attack was originally implemented by Goodfellow et al. (2014) with the
@@ -19,7 +18,6 @@ class FastGradientMethod(Attack):
   implementation extends the attack to other norms, and is therefore called
   the Fast Gradient Method.
   Paper link: https://arxiv.org/abs/1412.6572
-
   :param model: cleverhans.model.Model
   :param sess: optional tf.Session
   :param dtypestr: dtype of the data
@@ -35,10 +33,11 @@ class FastGradientMethod(Attack):
 
     super(FastGradientMethod, self).__init__(model, sess, dtypestr, **kwargs)
     self.feedable_kwargs = ('eps', 'y', 'y_target', 'clip_min', 'clip_max')
+    self.structural_kwargs = ['ord', 'sanity_checks']
+
   def generate(self, x, **kwargs):
     """
     Returns the graph for Fast Gradient Method adversarial examples.
-
     :param x: The model's symbolic inputs.
     :param kwargs: See `parse_params`
     """
@@ -57,7 +56,7 @@ class FastGradientMethod(Attack):
         clip_max=self.clip_max,
         targeted=(self.y_target is not None),
         sanity_checks=self.sanity_checks)
-    
+
   def parse_params(self,
                    eps=0.3,
                    ord=np.inf,
@@ -65,14 +64,12 @@ class FastGradientMethod(Attack):
                    y_target=None,
                    clip_min=None,
                    clip_max=None,
-                   sanity_checks=False,
+                   sanity_checks=True,
                    **kwargs):
     """
     Take in a dictionary of parameters and applies attack-specific checks
     before saving them as attributes.
-
     Attack-specific parameters:
-
     :param eps: (optional float) attack step size (input variation)
     :param ord: (optional) Order of the norm (mimics NumPy).
                 Possible values: np.inf, 1 or 2.
@@ -122,7 +119,7 @@ def fgm(x,
         clip_min=None,
         clip_max=None,
         targeted=False,
-        sanity_checks=False):
+        sanity_checks=True):
   """
   TensorFlow implementation of the Fast Gradient Method.
   :param x: the input placeholder
@@ -184,20 +181,18 @@ def fgm(x,
     # We don't currently support one-sided clipping
     assert clip_min is not None and clip_max is not None
     adv_x = utils_tf.clip_by_value(adv_x, clip_min, clip_max)
-  '''
+
   if sanity_checks:
     with tf.control_dependencies(asserts):
       adv_x = tf.identity(adv_x)
-  '''
+
   return adv_x
 
 
 def optimize_linear(grad, eps, ord=np.inf):
   """
   Solves for the optimal input to a linear function under a norm constraint.
-
   Optimal_perturbation = argmax_{eta, ||eta||_{ord} < eps} dot(eta, grad)
-
   :param grad: tf tensor containing a batch of gradients
   :param eps: float scalar specifying size of constraint region
   :param ord: int specifying order of norm
@@ -240,6 +235,7 @@ def optimize_linear(grad, eps, ord=np.inf):
   scaled_perturbation = utils_tf.mul(eps, optimal_perturbation)
   return scaled_perturbation
 
+'''
 class FastGradientMethodAe(Attack):
 
   def __init__(self, model, sess=None, dtypestr='float32', **kwargs):
@@ -344,14 +340,16 @@ def fgm(x,
   asserts = []
 
   # If a data range was specified, check that the input was in that range
-  '''
+  
+  
   if clip_min is not None:
     #asserts.append(utils_tf.assert_greater_equal(x, tf.cast(clip_min, x.dtype)))
     asserts.append(tf.assert_greater_equal(x, tf.cast(clip_min, x.dtype)))
   if clip_max is not None:
     #asserts.append(utils_tf.assert_less_equal(x, tf.cast(clip_max, x.dtype)))
     asserts.append(tf.assert_less_equal(x, tf.cast(clip_max, x.dtype)))
-  '''
+  
+  
   # Make sure the caller has not passed probs by accident
   #assert logits.op.type != 'Softmax'
 
@@ -435,4 +433,5 @@ def optimize_linear(grad, eps, ord=np.inf):
   scaled_perturbation = utils_tf.mul(eps, optimal_perturbation)
   return scaled_perturbation
 
-  self.structural_kwargs = ['ord', 'sanity_checks']
+  #self.structural_kwargs = ['ord', 'sanity_checks']
+'''
