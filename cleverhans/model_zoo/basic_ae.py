@@ -23,7 +23,7 @@ class ModelBasicAE(Model):
     self.n_hidden = n_hidden
     # Do a dummy run of fprop to make sure the variables are created from
     # the start
-    self.fprop(tf.placeholder(tf.float32, shape = (90, 32, 32, 3)))
+    self.fprop(tf.placeholder(tf.float32, shape = (90, 28, 28, 1)))
     # Put a reference to the params in self so that the params get pickled
     self.params = self.get_params()
 
@@ -42,15 +42,15 @@ class ModelBasicAE(Model):
         tf.layers.dense, activation=tf.nn.relu)
     with tf.variable_scope(self.scope, reuse=tf.AUTO_REUSE):
       #y = my_fcc(tf.reshape(x, [batch_size,h*w*c]), self.n_fcc, name = 'ENC_1')
-      y = my_fcc(tf.reshape(x, [batch_size,32*32*3]), self.n_fcc, name = 'ENC_1')
+      y = my_fcc(tf.reshape(x, [batch_size,28*28*1]), self.n_fcc, name = 'ENC_1')
       y = my_fcc(y, self.n_fcc, name = 'ENC_2')
       z = my_fcc(y, self.n_hidden, name='LATENT' )
       d = my_fcc(z, self.n_fcc, name='DEC_1')
       d = my_fcc(d, self.n_fcc, name='DEC_2')
       #recon = my_fcc(d, h*w*c, activation = tf.nn.sigmoid, name='RECON')
-      recon = my_fcc(d, 32*32*3, activation = tf.nn.sigmoid, name='RECON')
+      recon = my_fcc(d, 28*28*1, activation = tf.nn.sigmoid, name='RECON')
       #recon = tf.reshape(recon, (b, h, w, c))
-      recon = tf.reshape(recon, (batch_size, 32, 32, 3))
+      recon = tf.reshape(recon, (batch_size, 28, 28, 1))
       return {
         'LATENT': z,
         'RECON': recon

@@ -244,14 +244,14 @@ class CWL2(object):
 
     
     # prediction BEFORE-SOFTMAX of the model
-    self.x_hat = model.get_layer(self.newimg, "activation_7")
-    
+    #self.x_hat = model.get_layer(self.newimg, "activation_7")
+    self.x_hat = self.model.get_layer(self.newimg, "RECON")
     self.y_hat_logit = cl_model.get_logits(self.x_hat)
-    #self.y_hat_logit = cl_model.predict(self.x_hat, steps=1)
+    
     self.y_hat = tf.argmax(self.y_hat_logit, axis = 1)
 
    
-    self.y_targ_logit = cl_model.get_logits(self.targimg)
+    self.y_targ_logit = self.cl_model.get_logits(self.targimg)
     #self.y_targ_logit = cl_model.predict(self.targimg, steps=1)
     self.y_targ = tf.argmax(self.y_targ_logit, axis = 1)
 

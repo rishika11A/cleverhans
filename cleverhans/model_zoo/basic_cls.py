@@ -22,7 +22,7 @@ class ModelCls(Model):
     self.n_units = 100
     # Do a dummy run of fprop to make sure the variables are created from
     # the start
-    self.fprop(tf.placeholder(tf.float32, shape = (128, 32,32, 3)))
+    self.fprop(tf.placeholder(tf.float32, shape = (128, 28,28, 1)))
     #self.fprop(tf.placeholder(tf.float32, shape = (128, 100, 1)))
     # Put a reference to the params in self so that the params get pickled
     self.params = self.get_params()
@@ -39,7 +39,7 @@ class ModelCls(Model):
     my_fcc = functools.partial(
         tf.layers.dense, activation=tf.nn.relu)
     with tf.variable_scope(self.scope, reuse=tf.AUTO_REUSE):
-      y = my_fcc(tf.reshape(x, [batch_size,height*width*channels]), self.n_units, name = 'FCC1')
+      y = my_fcc(tf.reshape(x, [batch_size,28*28*1]), self.n_units, name = 'FCC1')
       #y = my_fcc(tf.reshape(z, [batch_size,100]), self.n_units, name = 'FCC1')
       y = my_fcc(y, self.n_units, name = 'FCC2')
       y = my_fcc(y, self.n_units, name = 'FCC3')

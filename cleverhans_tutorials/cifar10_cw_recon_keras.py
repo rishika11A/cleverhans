@@ -196,6 +196,8 @@ def cifar10_cw_recon(train_start=0, train_end=60000, test_start=0,
                     channels=nchannels, nb_filters=64,
                     nb_classes=nb_classes)
   preds_cl = cl_model(x)
+  def do_eval_cls(preds, x_set, y_set, x_tar_set,report_key, is_adv = None):
+    acc = model_eval(sess, x, y, preds, x_t, x_set, y_set, x_tar_set, args=eval_params_cls)
 
   def evaluate():
     # Evaluate the accuracy of the MNIST model on legitimate test examples
@@ -340,13 +342,16 @@ def cifar10_cw_recon(train_start=0, train_end=60000, test_start=0,
 
   recon_orig = model_ae.predict(adv_inputs)
   recon_adv = model_ae.predict(adv)
+  pred_adv_recon = cl_model.get_layer(recon_adv, 'LOGITS')
   shape = np.shape(adv_inputs)
   noise = reduce_sum(np.square(adv_inputs - adv), list(range(1, len(shape))))
   print("noise: ", noise)
-  scores1 = cl_model.evaluate(recon_adv, adv_input_y, verbose=1)
-  scores2 = cl_model.evaluate(recon_adv, adv_target_y, verbose = 1)
-  print("classifier acc_target: ", scores2[1])
-  print("classifier acc_true: ", scores1[1])
+  #scores1 = cl_model.evaluate(recon_adv, adv_input_y, verbose=1)
+  #scores2 = cl_model.evaluate(recon_adv, adv_target_y, verbose = 1)
+  acc_1 = model_eval(sess, x, y, pred_adv_recon, x_t, adv_inputs, adv_target_y, adv_input_targets, args=eval_params_cls)
+  acc_2 = model_eval(sess, x, y, pred_adv_recon, x_t, adv_inputs, adv_input_y, adv_input_targets, args=eval_params_cls)
+  print("classifier acc_target: ", acc_1)
+  print("classifier acc_true: ", acc_2)
 
   #print("recon_adv[0]\n", recon_adv[0,:,:,0])
   curr_class = 0
@@ -496,11 +501,13 @@ def cifar10_cw_recon(train_start=0, train_end=60000, test_start=0,
       
       noise = reduce_sum(tf.square(adv_inputs - adv_2), list(range(1, len(shape))))
       print("noise: ", noise)
-      
-    scores1 = cl_model.evaluate(recon_adv, adv_input_y, verbose=1)
-    scores2 = cl_model.eval_params(recon_adv, adv_target_y, verbose = 1)
-    print("classifier acc_target: ", scores2[1])
-    print("classifier acc_true: ", scores1[1])
+    pred_adv_recon=cl_model.get_layer(recon_adv)
+    #scores1 = cl_model.evaluate(recon_adv, adv_input_y, verbose=1)
+    #scores2 = cl_model.eval_params(recon_adv, adv_target_y, verbose = 1)
+    acc_1 = model_eval(sess, x, y, pred_adv_recon, x_t, adv_inputs, adv_target_y, adv_input_targets, args=eval_params_cls)
+    acc_2 = model_eval(sess, x, y, pred_adv_recon, x_t, adv_inputs, adv_input_y, adv_input_targets, args=eval_params_cls)
+    print("classifier acc_target: ", acc_1)
+    print("classifier acc_true: ", acc_2)
 
     #print("recon_adv[0]\n", recon_adv[0,:,:,0])
     curr_class = 0
@@ -575,12 +582,13 @@ def cifar10_cw_recon(train_start=0, train_end=60000, test_start=0,
 #binarization defense
   #if(binarization_defense == True or mean_filtering==True):
   if(binarization_defense==True):
-      adv[adv>0.5] = 1.0
-      adv[adv<=0.5] = 0.0
+    adv[adv>0.5] = 1.0
+    adv[adv<=0.5] = 0.0
     
      
     recon_orig = model_ae.predict(adv_inputs)
     recon_adv = model_ae.predict(adv)
+    pred_adv = cl_model.get_layer(recon_adv)
 
     eval_params = {'batch_size': 90}
     if targeted:
@@ -588,10 +596,12 @@ def cifar10_cw_recon(train_start=0, train_end=60000, test_start=0,
       noise = reduce_sum(tf.square(x_orig - x_adv), list(range(1, len(shape))))
       print("noise: ", noise)
      
-    scores1 = cl_model.evaluate(recon_adv, adv_input_y, verbose=1)
-    scores2 = cl_model.evalluate(recon_adv, adv_target_y, verbose = 1)
-    print("classifier acc_target: ", scores2[1])
-    print("classifier acc_true: ", scores1[1])
+    #scores1 = cl_model.evaluate(recon_adv, adv_input_y, verbose=1)
+    #scores2 = cl_model.evalluate(recon_adv, adv_target_y, verbose = 1)
+    acc_1 = model_eval(sess, x, y, pred_adv_recon, x_t, adv_inputs, adv_target_y, adv_input_targets, args=eval_params_cls)
+    acc_2 = model_eval(sess, x, y, pred_adv_recon, x_t, adv_inputs, adv_input_y, adv_input_targets, args=eval_params_cls)
+    print("classifier acc_target: ", acc_1)
+    print("classifier acc_true: ", acc_2)
     #print("recon_adv[0]\n", recon_adv[0,:,:,0])
     curr_class = 0
     if viz_enabled:
@@ -652,6 +662,7 @@ def cifar10_cw_recon(train_start=0, train_end=60000, test_start=0,
 
       recon_orig = model_ae.predict(adv_inputs)
       recon_adv = model_ae.predict(adv)
+      pred_adv_recon = cl_model.get_layer(recon_adv, 'LOGITS')
 
       eval_params = {'batch_size': 90}
       if targeted:
@@ -659,10 +670,12 @@ def cifar10_cw_recon(train_start=0, train_end=60000, test_start=0,
         noise = reduce_sum(tf.square(x_orig - x_adv), list(range(1, len(shape))))
         print("noise: ", noise)
        
-      scores1 = cl_model.evaluate(recon_adv, adv_input_y, verbose=1)
-      scores2 = cl_model.evalluate(recon_adv, adv_target_y, verbose = 1)
-      print("classifier acc_target: ", scores2[1])
-      print("classifier acc_true: ", scores1[1])
+      #scores1 = cl_model.evaluate(recon_adv, adv_input_y, verbose=1)
+      #scores2 = cl_model.evalluate(recon_adv, adv_target_y, verbose = 1)
+      acc_1 = model_eval(sess, x, y, pred_adv_recon, x_t, adv_inputs, adv_target_y, adv_input_targets, args=eval_params_cls)
+      acc_2 = model_eval(sess, x, y, pred_adv_recon, x_t, adv_inputs, adv_input_y, adv_input_targets, args=eval_params_cls)
+      print("classifier acc_target: ", acc_1)
+      print("classifier acc_true: ", acc_1)
       #print("recon_adv[0]\n", recon_adv[0,:,:,0])
       curr_class = 0
       if viz_enabled:
@@ -717,7 +730,7 @@ def cifar10_cw_recon(train_start=0, train_end=60000, test_start=0,
       # Draw the plot and return
       plt.savefig('cifar10_fig2_mean')
 
-    
+
         #return report
 
 def main(argv=None):
