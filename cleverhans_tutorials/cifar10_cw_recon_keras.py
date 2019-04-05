@@ -340,9 +340,9 @@ def cifar10_cw_recon(train_start=0, train_end=60000, test_start=0,
   #adv = sess.run(adv)
   
 
-  recon_orig = model_ae.predict(adv_inputs)
-  recon_adv = model_ae.predict(adv)
-  pred_adv_recon = cl_model.get_layer(recon_adv, 'LOGITS')
+  recon_orig = wrap_ae.get_layer(adv_inputs, 'activation_7')
+  recon_adv = wrap_ae.get_layer(adv, 'activation_7')
+  pred_adv_recon = wrap_cl.get_logits(recon_adv)
   shape = np.shape(adv_inputs)
   noise = reduce_sum(np.square(adv_inputs - adv), list(range(1, len(shape))))
   print("noise: ", noise)
@@ -495,8 +495,8 @@ def cifar10_cw_recon(train_start=0, train_end=60000, test_start=0,
     adv_2 = cw2.generate_np(adv_inputs, adv_input_targets,
                        **cw_params)
     
-    recon_adv= model_ae_adv.predict(adv)
-    recon_orig = model_ae_adv.predict(adv_inputs)
+    recon_adv= wrap_ae_adv.get_layer(adv, 'activation_7')
+    recon_orig = wrap_ae_adv.get_layer(adv_inputs, 'activation_7')
     if targeted:
       
       noise = reduce_sum(tf.square(adv_inputs - adv_2), list(range(1, len(shape))))
@@ -586,9 +586,9 @@ def cifar10_cw_recon(train_start=0, train_end=60000, test_start=0,
     adv[adv<=0.5] = 0.0
     
      
-    recon_orig = model_ae.predict(adv_inputs)
-    recon_adv = model_ae.predict(adv)
-    pred_adv = cl_model.get_layer(recon_adv)
+    recon_orig = wrap_ae.get_layer(adv_inputs, 'activation_7')
+    recon_adv = wrap_ae.get_layer(adv, 'activation_7')
+    pred_adv = wrap_cl.get_logits(recon_adv)
 
     eval_params = {'batch_size': 90}
     if targeted:
@@ -660,9 +660,9 @@ def cifar10_cw_recon(train_start=0, train_end=60000, test_start=0,
 
       adv = uniform_filter(adv, 2)
 
-      recon_orig = model_ae.predict(adv_inputs)
-      recon_adv = model_ae.predict(adv)
-      pred_adv_recon = cl_model.get_layer(recon_adv, 'LOGITS')
+      recon_orig = wrap_ae.get_layer(adv_inputs, 'activation_7')
+      recon_adv = wrap_ae.get_layer(adv, 'activation_7')
+      pred_adv_recon = wrap_cl.get_logits(recon_adv)
 
       eval_params = {'batch_size': 90}
       if targeted:
