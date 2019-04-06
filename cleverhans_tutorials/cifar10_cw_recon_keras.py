@@ -513,7 +513,7 @@ def cifar10_cw_recon(train_start=0, train_end=60000, test_start=0,
     recon_adv= wrap_ae_adv.get_layer(x, 'activation_7')
     recon_orig = wrap_ae_adv.get_layer(x, 'activation_7')
     recon_adv = sess.run(recon_adv, {x: adv_2})
-    recon_orig = sess.run(recon_orig, {x = adv_inputs})
+    recon_orig = sess.run(recon_orig, {x: adv_inputs})
 
     if targeted:
       
@@ -569,7 +569,7 @@ def cifar10_cw_recon(train_start=0, train_end=60000, test_start=0,
     print('Avg. L_2 norm of perturbations {0:.4f}'.format(percent_perturbed))
 
     # Close TF session
-    sess.close()
+    #sess.close()
 
     # Finally, block & display a grid of all the adversarial examples
     if viz_enabled:
@@ -728,7 +728,7 @@ def cifar10_cw_recon(train_start=0, train_end=60000, test_start=0,
       print("classifier acc_target: ", acc_1)
       print("classifier acc_true: ", acc_2)
 
-      
+
       curr_class = 0
       if viz_enabled:
         for j in range(nb_classes):
