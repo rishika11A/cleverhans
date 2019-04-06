@@ -514,6 +514,8 @@ def cifar10_cw_recon(train_start=0, train_end=60000, test_start=0,
     recon_orig = wrap_ae_adv.get_layer(x, 'activation_7')
     recon_adv = sess.run(recon_adv, {x: adv_2})
     recon_orig = sess.run(recon_orig, {x: adv_inputs})
+    pred_adv_recon = wrap_cl.get_logits(x)
+    pred_adv_recon = sess.run(pred_adv_recon, {x:recon_adv})
 
     if targeted:
       
@@ -617,17 +619,15 @@ def cifar10_cw_recon(train_start=0, train_end=60000, test_start=0,
      
     recon_orig = wrap_ae.get_layer(x, 'activation_7')
     recon_adv = wrap_ae.get_layer(x, 'activation_7')
-    pred_adv = wrap_cl.get_logits(x)
+    #pred_adv = wrap_cl.get_logits(x)
     recon_orig = sess.run(recon_orig, {x: adv_inputs})
     recon_adv = sess.run(recon_adv, {x: adv})
-    pred_adv = sess.run(pred_adv, {x: recon_adv})
-
+    #pred_adv = sess.run(pred_adv, {x: recon_adv})
+    pred_adv_recon = wrap_cl.get_logits(x)
+    pred_adv_recon = sess.run(pred_adv_recon, {x:recon_adv})
 
     eval_params = {'batch_size': 90}
     if targeted:
-      
-      noise = reduce_sum(tf.square(x_orig - x_adv), list(range(1, len(shape))))
-      print("noise: ", noise)
      
       noise = np.sum(np.square(adv-adv_inputs))/(np.shape(adv)[0])
       noise = pow(noise,0.5)
@@ -703,16 +703,16 @@ def cifar10_cw_recon(train_start=0, train_end=60000, test_start=0,
 
       recon_orig = wrap_ae.get_layer(x, 'activation_7')
       recon_adv = wrap_ae.get_layer(x, 'activation_7')
-      pred_adv = wrap_cl.get_logits(x)
+      pred_adv_recon = wrap_cl.get_logits(x)
       recon_orig = sess.run(recon_orig, {x: adv_inputs})
       recon_adv = sess.run(recon_adv, {x: adv})
-      pred_adv = sess.run(pred_adv, {x: recon_adv})
+      pred_adv_recon = sess.run(pred_adv, {x: recon_adv})
 
       eval_params = {'batch_size': 90}
       if targeted:
         
-        noise = reduce_sum(tf.square(x_orig - x_adv), list(range(1, len(shape))))
-        print("noise: ", noise)
+        #noise = reduce_sum(tf.square(x_orig - x_adv), list(range(1, len(shape))))
+        #print("noise: ", noise)
        
       noise = np.sum(np.square(adv-adv_inputs))/(np.shape(adv)[0])
       noise = pow(noise,0.5)
