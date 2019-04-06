@@ -340,9 +340,12 @@ def cifar10_cw_recon(train_start=0, train_end=60000, test_start=0,
   #adv = sess.run(adv)
   
 
-  recon_orig = wrap_ae.get_layer(adv_inputs, 'activation_7')
-  recon_adv = wrap_ae.get_layer(adv, 'activation_7')
-  pred_adv_recon = wrap_cl.get_logits(recon_adv)
+  recon_orig = wrap_ae.get_layer(x, 'activation_7')
+  recon_orig = sess.run(recon_orig, feed_dict = {x: adv_inputs})
+  recon_adv = wrap_ae.get_layer(x, 'activation_7')
+  recon_adv = sess.run(recon_adv, feed_dict = {x: adv})
+  pred_adv_recon = wrap_cl.get_logits(x)
+  pred_adv_recon = sess.run(pred_adv_recon, {x:recon_adv})
   shape = np.shape(adv_inputs)
   noise = reduce_sum(np.square(adv_inputs - adv), list(range(1, len(shape))))
   print("noise: ", noise)
@@ -496,7 +499,8 @@ def cifar10_cw_recon(train_start=0, train_end=60000, test_start=0,
                        **cw_params)
     
     recon_adv= wrap_ae_adv.get_layer(adv, 'activation_7')
-    recon_orig = wrap_ae_adv.get_layer(adv_inputs, 'activation_7')
+    recon_orig = wrap_ae_adv.get_layer(x, 'activation_7')
+    recon_orig = s
     if targeted:
       
       noise = reduce_sum(tf.square(adv_inputs - adv_2), list(range(1, len(shape))))
