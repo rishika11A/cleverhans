@@ -510,9 +510,11 @@ def cifar10_cw_recon(train_start=0, train_end=60000, test_start=0,
     adv_2 = cw2.generate_np(adv_inputs, adv_input_targets,
                        **cw_params)
     
-    recon_adv= wrap_ae_adv.get_layer(adv, 'activation_7')
+    recon_adv= wrap_ae_adv.get_layer(x, 'activation_7')
     recon_orig = wrap_ae_adv.get_layer(x, 'activation_7')
-    recon_orig = s
+    recon_adv = sess.run(recon_adv, {x: adv_2})
+    recon_orig = sess.run(recon_orig, {x = adv_inputs})
+
     if targeted:
       
       noise = reduce_sum(tf.square(adv_inputs - adv_2), list(range(1, len(shape))))
@@ -604,7 +606,7 @@ def cifar10_cw_recon(train_start=0, train_end=60000, test_start=0,
       # Draw the plot and return
       plt.savefig('cifar10_fig2_adv_trained')
 
-      return report
+      #return report
 
 #binarization defense
   #if(binarization_defense == True or mean_filtering==True):
@@ -613,9 +615,13 @@ def cifar10_cw_recon(train_start=0, train_end=60000, test_start=0,
     adv[adv<=0.5] = 0.0
     
      
-    recon_orig = wrap_ae.get_layer(adv_inputs, 'activation_7')
-    recon_adv = wrap_ae.get_layer(adv, 'activation_7')
-    pred_adv = wrap_cl.get_logits(recon_adv)
+    recon_orig = wrap_ae.get_layer(x, 'activation_7')
+    recon_adv = wrap_ae.get_layer(x, 'activation_7')
+    pred_adv = wrap_cl.get_logits(x)
+    recon_orig = sess.run(recon_orig, {x: adv_inputs})
+    recon_adv = sess.run(recon_adv, {x: adv})
+    pred_adv = sess.run(pred_adv, {x: recon_adv})
+
 
     eval_params = {'batch_size': 90}
     if targeted:
@@ -623,13 +629,21 @@ def cifar10_cw_recon(train_start=0, train_end=60000, test_start=0,
       noise = reduce_sum(tf.square(x_orig - x_adv), list(range(1, len(shape))))
       print("noise: ", noise)
      
-    #scores1 = cl_model.evaluate(recon_adv, adv_input_y, verbose=1)
-    #scores2 = cl_model.evalluate(recon_adv, adv_target_y, verbose = 1)
-    acc_1 = model_eval(sess, x, y, pred_adv_recon, x_t, adv_inputs, adv_target_y, adv_input_targets, args=eval_params_cls)
-    acc_2 = model_eval(sess, x, y, pred_adv_recon, x_t, adv_inputs, adv_input_y, adv_input_targets, args=eval_params_cls)
-    print("classifier acc_target: ", acc_1)
-    print("classifier acc_true: ", acc_2)
-    #print("recon_adv[0]\n", recon_adv[0,:,:,0])
+      noise = np.sum(np.square(adv-adv_inputs))/(np.shape(adv)[0])
+      noise = pow(noise,0.5)
+      d1 = np.sum(np.square(recon_adv-adv_inputs))/(np.shape(adv_inputs)[0])
+      d2 = np.sum(np.square(recon_adv-adv_input_targets))/(np.shape(adv_inputs)[0])
+      acc_1 = (sum(np.argmax(pred_adv_recon, axis=-1)==
+                               np.argmax(adv_target_y, axis=-1)))/(np.shape(adv_target_y)[0])
+      acc_2 = (sum(np.argmax(pred_adv_recon, axis=-1)==
+                               np.argmax(adv_input_y, axis=-1)))/(np.shape(adv_target_y)[0])
+      print("noise: ", noise)
+      print("d1: ", d1)
+      print("d2: ", d2)
+      print("classifier acc_target: ", acc_1)
+      print("classifier acc_true: ", acc_2)
+
+
     curr_class = 0
     if viz_enabled:
       for j in range(nb_classes):
@@ -687,9 +701,12 @@ def cifar10_cw_recon(train_start=0, train_end=60000, test_start=0,
 
       adv = uniform_filter(adv, 2)
 
-      recon_orig = wrap_ae.get_layer(adv_inputs, 'activation_7')
-      recon_adv = wrap_ae.get_layer(adv, 'activation_7')
-      pred_adv_recon = wrap_cl.get_logits(recon_adv)
+      recon_orig = wrap_ae.get_layer(x, 'activation_7')
+      recon_adv = wrap_ae.get_layer(x, 'activation_7')
+      pred_adv = wrap_cl.get_logits(x)
+      recon_orig = sess.run(recon_orig, {x: adv_inputs})
+      recon_adv = sess.run(recon_adv, {x: adv})
+      pred_adv = sess.run(pred_adv, {x: recon_adv})
 
       eval_params = {'batch_size': 90}
       if targeted:
@@ -697,13 +714,21 @@ def cifar10_cw_recon(train_start=0, train_end=60000, test_start=0,
         noise = reduce_sum(tf.square(x_orig - x_adv), list(range(1, len(shape))))
         print("noise: ", noise)
        
-      #scores1 = cl_model.evaluate(recon_adv, adv_input_y, verbose=1)
-      #scores2 = cl_model.evalluate(recon_adv, adv_target_y, verbose = 1)
-      acc_1 = model_eval(sess, x, y, pred_adv_recon, x_t, adv_inputs, adv_target_y, adv_input_targets, args=eval_params_cls)
-      acc_2 = model_eval(sess, x, y, pred_adv_recon, x_t, adv_inputs, adv_input_y, adv_input_targets, args=eval_params_cls)
+      noise = np.sum(np.square(adv-adv_inputs))/(np.shape(adv)[0])
+      noise = pow(noise,0.5)
+      d1 = np.sum(np.square(recon_adv-adv_inputs))/(np.shape(adv_inputs)[0])
+      d2 = np.sum(np.square(recon_adv-adv_input_targets))/(np.shape(adv_inputs)[0])
+      acc_1 = (sum(np.argmax(pred_adv_recon, axis=-1)==
+                               np.argmax(adv_target_y, axis=-1)))/(np.shape(adv_target_y)[0])
+      acc_2 = (sum(np.argmax(pred_adv_recon, axis=-1)==
+                               np.argmax(adv_input_y, axis=-1)))/(np.shape(adv_target_y)[0])
+      print("noise: ", noise)
+      print("d1: ", d1)
+      print("d2: ", d2)
       print("classifier acc_target: ", acc_1)
-      print("classifier acc_true: ", acc_1)
-      #print("recon_adv[0]\n", recon_adv[0,:,:,0])
+      print("classifier acc_true: ", acc_2)
+
+      
       curr_class = 0
       if viz_enabled:
         for j in range(nb_classes):
