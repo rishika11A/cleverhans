@@ -35,6 +35,8 @@ from cleverhans.dataset import CIFAR10
 from cleverhans.augmentation import random_horizontal_flip, random_shift
 from cleverhans.model_zoo.all_convolutional import ModelAllConvolutional
 from cleverhans.serial import save
+import matplotlib
+matplotlib.use('agg')
 import matplotlib.pyplot as plt
 from keras.models import Sequential
 from keras.layers import Dense, Dropout, Activation, Flatten
@@ -61,11 +63,11 @@ MODEL_PATH = os.path.join('models', 'mnist_cw')
 MODEL_PATH_CLS = os.path.join('models', 'mnist_cw_cl')
 TARGETED = True
 adv_train = False
-binarization_defense = False
+binarization_defense = True
 mean_filtering = True
 NB_FILTERS = 4 #64
-clean_train_ae = True
-clean_train_cl = True
+clean_train_ae = False
+clean_train_cl = False
 TRAIN_DIR_AE = 'train_dir_ae'
 TRAIN_DIR_CL = 'train_dir_cl'
 FILENAME = 'mnist.ckpt'
@@ -681,7 +683,7 @@ def cifar10_cw_recon(train_start=0, train_end=60000, test_start=0,
     # Draw the plot and return
     plt.savefig('cifar10_fig2_bin')
 
-    if(mean_filtering ==True):
+  if(mean_filtering ==True):
 
       adv = uniform_filter(adv, 2)
 
