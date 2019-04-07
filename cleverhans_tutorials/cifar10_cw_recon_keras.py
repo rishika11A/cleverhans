@@ -63,14 +63,15 @@ MODEL_PATH = os.path.join('models', 'mnist_cw')
 MODEL_PATH_CLS = os.path.join('models', 'mnist_cw_cl')
 TARGETED = True
 adv_train = False
-binarization_defense = True
-mean_filtering = True
+binarization_defense = False
+mean_filtering = False
 NB_FILTERS = 4 #64
 clean_train_ae = False
 clean_train_cl = False
 TRAIN_DIR_AE = 'train_dir_ae'
 TRAIN_DIR_CL = 'train_dir_cl'
 FILENAME = 'mnist.ckpt'
+train_further = False
 
 def cifar10_cw_recon(train_start=0, train_end=60000, test_start=0,
                       test_end=10000, viz_enabled=VIZ_ENABLED,
@@ -185,8 +186,24 @@ def cifar10_cw_recon(train_start=0, train_end=60000, test_start=0,
     saver = tf.train.Saver()
     #print(ckpt_path)
     saver.restore(sess, "train_dir/model_ae.ckpt")
-    print("Model loaded")
     evaluate_ae()
+    if train_further:
+      train_params = {
+        'nb_epochs': 100,
+        'batch_size': batch_size,
+        'learning_rate': learning_rate,
+        'train_dir': train_dir_ae,
+        'filename': filename
+      }
+      #training with the saved model as starting point
+      loss = SquaredError(wrap_ae)
+      train_ae(sess, loss, x_train, x_train, evaluate=evaluate_ae,
+            args=train_params, rng=rng)
+      saver = tf.train.Saver()
+      saver.save(sess, "train_dir/model_ae_final.ckpt")
+      evaluate_ae()
+      print("Model loaded and trained for more epochs")
+    
 
   num_classes = 10
   '''
@@ -210,7 +227,7 @@ def cifar10_cw_recon(train_start=0, train_end=60000, test_start=0,
     print('Test accuracy on legitimate examples: %0.4f' % acc)
 
   train_params = {
-      'nb_epochs': 40,
+      'nb_epochs': 100,
       'batch_size': batch_size,
       'learning_rate': learning_rate,
       'train_dir': train_dir_cl,
@@ -239,8 +256,23 @@ def cifar10_cw_recon(train_start=0, train_end=60000, test_start=0,
     saver = tf.train.Saver()
     #print(ckpt_path)
     saver.restore(sess, "train_dir/model_cnn_cl.ckpt")
-    print("Model loaded")
     evaluate()
+    if(train_further):
+      train_params = {
+        'nb_epochs': 100,
+        'batch_size': batch_size,
+        'learning_rate': learning_rate,
+        'train_dir': train_dir_cl,
+        'filename': filename
+      }
+      loss_cl = CrossEntropy(wrap_cl, smoothing=label_smoothing)
+      train(sess, loss_cl, x_train, y_train, evaluate=evaluate, optimizer = tf.train.RMSPropOptimizer(learning_rate = 0.0001, decay = 1e-6),
+            args=train_params, rng=rng)
+      saver = tf.train.Saver()
+      saver.save(sess, "train_dir/model_cnn_cl_final.ckpt")
+      print("Model loaded and trained further")
+      evaluate()
+
 
 
     # Score trained model.
@@ -495,9 +527,17 @@ def cifar10_cw_recon(train_start=0, train_end=60000, test_start=0,
     wrap_ae_adv = KerasModelWrapper(model_ae_adv)
     #print("recon: ",recon)
     #print("Defined TensorFlow model graph.")
-
+    train_params = {
+      'nb_epochs': 2,
+      'batch_size': batch_size,
+      'learning_rate': learning_rate,
+      'train_dir': train_dir_cl,
+      'filename': filename
+  }
     print("Training Adversarial AE")
-    loss = SquaredError(wrap_ae_adv)
+    loss_2 = SquaredError(wrap_ae_adv)
+    print("layer names: "wrap_ae_adv.get_layer_names())
+
     train_ae(sess, loss_2, x_train_app, x_train_aim, evaluate=evaluate_ae,
           args=train_params, rng=rng)
     saver = tf.train.Saver()
@@ -510,8 +550,8 @@ def cifar10_cw_recon(train_start=0, train_end=60000, test_start=0,
     adv_2 = cw2.generate_np(adv_inputs, adv_input_targets,
                        **cw_params)
     
-    recon_adv= wrap_ae_adv.get_layer(x, 'activation_7')
-    recon_orig = wrap_ae_adv.get_layer(x, 'activation_7')
+    recon_adv= wrap_ae_adv.get_layer(x, 'activation_20')
+    recon_orig = wrap_ae_adv.get_layer(x, 'activation_20')
     recon_adv = sess.run(recon_adv, {x: adv_2})
     recon_orig = sess.run(recon_orig, {x: adv_inputs})
     pred_adv_recon = wrap_cl.get_logits(x)
@@ -706,14 +746,10 @@ def cifar10_cw_recon(train_start=0, train_end=60000, test_start=0,
       pred_adv_recon = wrap_cl.get_logits(x)
       recon_orig = sess.run(recon_orig, {x: adv_inputs})
       recon_adv = sess.run(recon_adv, {x: adv})
-      pred_adv_recon = sess.run(pred_adv, {x: recon_adv})
+      pred_adv_recon = sess.run(pred_adv_recon, {x: recon_adv})
 
       eval_params = {'batch_size': 90}
-      if targeted:
-        
-        #noise = reduce_sum(tf.square(x_orig - x_adv), list(range(1, len(shape))))
-        #print("noise: ", noise)
-       
+      
       noise = np.sum(np.square(adv-adv_inputs))/(np.shape(adv)[0])
       noise = pow(noise,0.5)
       d1 = np.sum(np.square(recon_adv-adv_inputs))/(np.shape(adv_inputs)[0])
