@@ -72,6 +72,7 @@ clean_train_cl = False
 TRAIN_DIR_AE = 'train_dir_ae'
 TRAIN_DIR_CL = 'train_dir_cl'
 FILENAME = 'mnist.ckpt'
+train_further = False
 
 def cifar10_cw_recon(train_start=0, train_end=60000, test_start=0,
                       test_end=10000, viz_enabled=VIZ_ENABLED,
@@ -192,24 +193,24 @@ def cifar10_cw_recon(train_start=0, train_end=60000, test_start=0,
     #print(ckpt_path)
     saver.restore(sess, "train_dir/model_vae.ckpt")
     evaluate_ae()
-    '''
-    train_params = {
-      'nb_epochs': 10,
-      'batch_size': batch_size,
-      'learning_rate': learning_rate,
-      'train_dir': train_dir_ae,
-      'filename': filename
-  }
-    #training with the saved model as starting point
-    loss = SquaredError(wrap_ae)
-    train_ae(sess, loss, x_train, x_train, evaluate=evaluate_vae,
-          args=train_params, rng=rng)
-    saver = tf.train.Saver()
-    saver.save(sess, "train_dir/model_ae_final.ckpt")
+    if(train_further):
+      train_params = {
+        'nb_epochs': 10,
+        'batch_size': batch_size,
+        'learning_rate': learning_rate,
+        'train_dir': train_dir_ae,
+        'filename': filename
+    }
+      #training with the saved model as starting point
+      loss = SquaredError(wrap_vae)
+      train_ae(sess, loss, x_train, x_train, evaluate=evaluate_vae,
+            args=train_params, rng=rng)
+      saver = tf.train.Saver()
+      saver.save(sess, "train_dir/model_ae_final.ckpt")
 
-    evaluate_ae()
-    '''
-    print("Model loaded and trained for more epochs")
+      evaluate_ae()
+    
+      print("Model loaded and trained for more epochs")
     
 
   num_classes = 10
