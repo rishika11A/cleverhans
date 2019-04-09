@@ -256,7 +256,8 @@ class FastGradientMethodAe(Attack):
     return fgm(
         x,
         x_target,
-        self.model.get_layer(x, 'RECON'),
+        #self.model.get_layer(x, 'RECON')
+        self.model.get_layer(x,'activation_7'),
         #self.model.get_layer(x, 'LATENT'),
         #self.model.get_layer(x_target, 'LATENT'),
         eps=self.eps,
