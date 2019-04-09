@@ -293,7 +293,7 @@ def mnist_ae(train_start=0, train_end=60000, test_start=0,
     latent1_orig = model.get_layer(x, 'LATENT')
     latent1_orig_recon = model.get_layer(recons, 'LATENT')
     print("np.shape(latent_orig): ",np.shape(latent1_orig))
-    y_logits = class_model.get_logits(latent1_orig)
+    #y_logits = class_model.get_logits(latent1_orig)
 
     def evaluate():
       do_eval(recons, x_test, x_test, y_test, y_test, 'clean_train_clean_eval', False, None, None, latent1_orig, latent1_orig_recon)
@@ -408,6 +408,8 @@ def mnist_ae(train_start=0, train_end=60000, test_start=0,
       #plot_results(sess, x_train[0:5], x_train_target[0:5], recons2[0:5], adv_x2[0:5], recons2_adv[0:5], adv_trained = True)
   
   if (binarization == True):
+    print("binarization")
+    print("-------------")
     adv_evald[adv_evald>0.5] = 1.0
     adv_evald[adv_evald<=0.5] = 0.0
 
@@ -417,50 +419,53 @@ def mnist_ae(train_start=0, train_end=60000, test_start=0,
     pred_adv_recon = class_model.get_layer(recon_adv, 'LOGITS')
     eval_params = {'batch_size': 90}
 
-    recons_adv_evald = sess.run(recon_adv)
-    
+    recon_adv = sess.run(recon_adv)
+    pred_adv_recon = sess.run(pred_adv_recon)
     #noise, d1, d2, dist_diff, avg_dist_lat = model_eval_ae(sess, x, x_t,recons, adv_inputs, adv_input_targets, adv_evald, recon_adv,lat_orig, lat_orig_recon, args=eval_params)
-    d1 = tf.reduce_sum(tf.squared_difference(tf.reshape(recon_adv,(tf.shape(recon_adv)[0],784)), tf.reshape(adv_inputs, (tf.shape(adv_inputs)[0], 784))),1)
-    d2 = tf.reduce_sum(tf.squared_difference(tf.reshape(recon_adv,(tf.shape(recon_adv)[0],784)), tf.reshape(adv_input_targets, (tf.shape(adv_input_targets)[0], 784))),1)
-    noise = pow(np.sum(np.square(adv_inputs - adv_evald)),0.5)/90.0
+    noise = np.sum(np.square(adv_evald-adv_inputs))/len(adv_inputs)
+    noise = pow(noise,0.5)
+    d1 = np.sum(np.square(recon_adv-adv_inputs))/len(adv_inputs)
+    d2 = np.sum(np.square(recon_adv-adv_input_targets))/len(adv_inputs)
+    acc1 = (sum(np.argmax(pred_adv_recon, axis=-1)==np.argmax(adv_target_y, axis=-1)))/len(adv_inputs)
+    acc2 = (sum(np.argmax(pred_adv_recon, axis=-1)==np.argmax(adv_input_y, axis=-1)))/len(adv_inputs)
     print("d1: ", d1)
     print("d2: ", d2)
     print("noise: ", noise)
-    eval_params_cls = {'batch_size': 90}
-    acc1 = model_eval(sess, x, y, pred_adv_recon, x_t, adv_inputs, adv_target_y, adv_input_targets, args=eval_params_cls)
-    acc2 = model_eval(sess, x, y, pred_adv_recon, x_t, adv_inputs, adv_input_y, adv_input_targets, args=eval_params_cls)
     print("classifier acc for target class: ", acc1)
     print("classifier acc for true class: ", acc2)
     #do_eval_cls(pred_adv_recon,adv_inputs,adv_input_y, adv_input_targets, 'clean_train_adv_eval', True)
     #do_eval_cls(pred_adv_recon,adv_inputs,adv_target_y, adv_input_targets, 'clean_train_adv_eval', True)
     #print("classifier acc for target class: ", acc1)
     #print("classifier acc for true class: ", acc2)
-    plot_results(adv_inputs, adv_evald, recons_orig_evald, recons_adv_evald)
+    plot_results(adv_inputs, adv_evald, recons_orig_evald, recon_adv)
 
 
   if (mean_filtering == True):
+    print("mean filtering")
+    print("--------------------")
     adv_evald = uniform_filter(adv_evald, 2)
     recon_adv = model.get_layer(adv_evald, 'RECON')
     lat_orig = model.get_layer(x, 'LATENT')
     lat_orig_recon = model.get_layer(recons, 'LATENT')
     pred_adv_recon = class_model.get_layer(recon_adv, 'LOGITS')
     eval_params = {'batch_size': 90}
-    reocns_adv_evald = sess.run(recon_adv)
     
-    #noise, d1, d2, dist_diff, avg_dist_lat = model_eval_ae(sess, x, x_t,recons, adv_inputs, adv_input_targets, adv_evald, recon_adv,lat_orig, lat_orig_recon, args=eval_params)
-    d1 = tf.reduce_sum(tf.squared_difference(tf.reshape(recon_adv,(tf.shape(recon_adv)[0],784)), tf.reshape(adv_inputs, (tf.shape(adv_inputs)[0], 784))),1)
-    d2 = tf.reduce_sum(tf.squared_difference(tf.reshape(recon_adv,(tf.shape(recon_adv)[0],784)), tf.reshape(adv_input_targets, (tf.shape(adv_input_targets)[0], 784))),1)
-    noise = pow(np.sum(np.square(adv_inputs - adv_evald)),0.5)/90.0
+    recon_adv = sess.run(recon_adv)
+    pred_adv_recon = sess.run(pred_adv_recon)
+    
+    noise = np.sum(np.square(adv_evald-adv_inputs))/len(adv_inputs)
+    noise = pow(noise,0.5)
+    d1 = np.sum(np.square(recon_adv-adv_inputs))/len(adv_inputs)
+    d2 = np.sum(np.square(recon_adv-adv_input_targets))/len(adv_inputs)
+    acc1 = (sum(np.argmax(pred_adv_recon, axis=-1)==np.argmax(adv_target_y, axis=-1)))/len(adv_inputs)
+    acc2 = (sum(np.argmax(pred_adv_recon, axis=-1)==np.argmax(adv_input_y, axis=-1)))/len(adv_inputs)
 
     print("d1: ", d1)
     print("d2: ", d2)
     print("noise: ", noise)
-    eval_params_cls = {'batch_size': 90}
-    acc1 = model_eval(sess, x, y, pred_adv_recon, x_t, adv_inputs, adv_target_y, adv_input_targets, args=eval_params_cls)
-    acc2 = model_eval(sess, x, y, pred_adv_recon, x_t, adv_inputs, adv_input_y, adv_input_targets, args=eval_params_cls)
     print("classifier acc for target class: ", acc1)
     print("classifier acc for true class: ", acc2)
-    plot_results(adv_inputs, adv_evald, recons_orig_evald, recons_adv_evald)
+    plot_results(adv_inputs, adv_evald, recons_orig_evald, recon_adv)
     
   return report
 def main(argv=None):

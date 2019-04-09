@@ -235,7 +235,7 @@ def optimize_linear(grad, eps, ord=np.inf):
   scaled_perturbation = utils_tf.mul(eps, optimal_perturbation)
   return scaled_perturbation
 
-'''
+
 class FastGradientMethodAe(Attack):
 
   def __init__(self, model, sess=None, dtypestr='float32', **kwargs):
@@ -341,14 +341,14 @@ def fgm(x,
 
   # If a data range was specified, check that the input was in that range
   
-  
+  '''
   if clip_min is not None:
     #asserts.append(utils_tf.assert_greater_equal(x, tf.cast(clip_min, x.dtype)))
     asserts.append(tf.assert_greater_equal(x, tf.cast(clip_min, x.dtype)))
   if clip_max is not None:
     #asserts.append(utils_tf.assert_less_equal(x, tf.cast(clip_max, x.dtype)))
     asserts.append(tf.assert_less_equal(x, tf.cast(clip_max, x.dtype)))
-  
+  '''
   
   # Make sure the caller has not passed probs by accident
   #assert logits.op.type != 'Softmax'
@@ -434,4 +434,3 @@ def optimize_linear(grad, eps, ord=np.inf):
   return scaled_perturbation
 
   #self.structural_kwargs = ['ord', 'sanity_checks']
-'''

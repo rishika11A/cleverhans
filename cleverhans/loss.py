@@ -177,6 +177,34 @@ class CrossEntropy(Loss):
         for coeff, logit in safe_zip(coeffs, logits))
     return loss
 
+class vae_loss(Loss):
+
+  def __init__(self, model,**kwargs):
+   
+    self.kwargs = kwargs
+    Loss.__init__(self, model, locals())
+    
+  def fprop(self,x,x_t,**kwargs):
+
+    z_m = self.model.get_layer(x, 'Z_MEAN')
+    z_v = self.model.get_layer(x, 'Z_LOG_VAR')
+    input_flat = tf.contrib.layers.flatten(x)
+    generated_images = self.model.get_layer(x, 'RECON')
+
+    # Flatten for the losses
+    generated_flat = tf.contrib.layers.flatten(generated_images)
+    latent_loss = -.5 * tf.reduce_sum(1. + z_v - tf.pow(z_m, 2) - tf.exp(z_v), 
+                                        reduction_indices=1)
+    # Compute reconstruction loss
+    reconstruction_loss = -tf.reduce_sum(input_flat * tf.log(1e-10 + generated_flat)
+                                 + (1-input_flat) * tf.log(1e-10 + 1 - generated_flat), 1)
+
+    # Global loss
+    global_loss = tf.reduce_mean(latent_loss + reconstruction_loss, name='cost_function')
+      
+
+    return global_loss
+
 class SquaredError(Loss):
 
   def __init__(self, model, attack=None,
@@ -210,8 +238,9 @@ class SquaredError(Loss):
       coeffs = [1.]
     assert np.allclose(sum(coeffs), 1.)
 
-    recon = [self.model.get_layer(x, 'RECON') for x in x]
-    
+    #recon = [self.model.get_layer(x, 'RECON') for x in x]
+    recon_layer_name = self.model.get_layer_names()[-1]
+    recon = [self.model.get_layer(x,recon_layer_name) for x in x]
 
     #print("layer names: ",self.model.get_layer_names())
     

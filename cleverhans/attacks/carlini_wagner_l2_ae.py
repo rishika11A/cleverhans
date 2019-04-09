@@ -245,6 +245,8 @@ class CWL2(object):
     
     # prediction BEFORE-SOFTMAX of the model
     #self.x_hat = model.get_layer(self.newimg, "activation_7")
+    #recon_layer_name = self.model.get_layer_names()[-1]
+    #self.x_hat = self.model.get_layer(self.newimg,recon_layer_name)
     self.x_hat = self.model.get_layer(self.newimg, "RECON")
     self.y_hat_logit = cl_model.get_logits(self.x_hat)
     

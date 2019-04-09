@@ -130,7 +130,7 @@ def cnn_cl_model(logits=False, input_ph=None, img_rows=28, img_cols=28,
     model.add(layer)
 
   return model
-           
+
 def ae_model(input_ph=None, img_rows=28, img_cols=28,
               channels=1):
   model = Sequential()

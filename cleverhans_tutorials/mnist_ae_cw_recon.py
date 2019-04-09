@@ -45,8 +45,8 @@ MODEL_PATH = os.path.join('models', 'mnist_cw')
 MODEL_PATH_CLS = os.path.join('models', 'mnist_cw_cl')
 TARGETED = True
 adv_train = True
-binarization_defense = True
-mean_filtering = True
+binarization_defense = False
+mean_filtering = False
 saver_ae = False
 saver_cls = False
 
@@ -143,11 +143,11 @@ def mnist_tutorial_cw(train_start=0, train_end=60000, test_start=0,
 
   if(saver_ae==True):
     saver = tf.train.Saver()
-    model = saver.restore(sess, model_path)
+    model = saver.restore(sess, "train_dir_mnist/model_ae")
   else:
     train_ae(sess, loss, x_train,x_train, evaluate = eval_ae, args=train_params, rng=rng, var_list=model.get_params())
     saver = tf.train.Saver()
-    saver.save(sess, model_path)
+    saver.save(sess, "train_dir_mnist/model_ae")
 
   
   def do_eval_cls(preds, x_set, y_set, x_tar_set,report_key, is_adv = None):
@@ -167,10 +167,10 @@ def mnist_tutorial_cw(train_start=0, train_end=60000, test_start=0,
 
   #train_cls(sess, loss_cls, x_train, y_train, evaluate = eval_cls, args = train_params_cls, rng = rng, var_list = cl_model.get_params())
   if(saver_cls == True):
-    saver.restore(sess, model_path_cls)
+    saver.restore(sess, "train_dir_mnist/model_cl")
   else:
     train_cls(sess, loss_cls, x_train, y_train, evaluate = eval_cls, args = train_params_cls, rng = rng, var_list = cl_model.get_params())
-    saver.save(sess, model_path_cls)
+    saver.save(sess, "train_dir_mnist/model_cl")
 
   ###########################################################################
   # Craft adversarial examples using Carlini and Wagner's approach
@@ -280,20 +280,35 @@ def mnist_tutorial_cw(train_start=0, train_end=60000, test_start=0,
   lat_orig_recon = model.get_layer(recons, 'LATENT')
   pred_adv_recon = cl_model.get_layer(recon_adv, 'LOGITS')
 
+  recon_orig = sess.run(recon_orig)
+  recon_adv = sess.run(recon_adv)
+  pred_adv_recon = sess.run(pred_adv_recon)
+
+
   #eval_params = {'batch_size': np.minimum(nb_classes, source_samples)}
   eval_params = {'batch_size': 90}
   if targeted:
-    noise, d1, d2, dist_diff, avg_dist_lat = model_eval_ae(sess, x, x_t,recons, adv_inputs, adv_input_targets, adv, recon_adv,lat_orig, lat_orig_recon, args=eval_params)
-    acc_1 = model_eval(sess, x, y, pred_adv_recon, x_t, adv_inputs, adv_target_y, adv_input_targets, args=eval_params_cls)
-    acc_2 = model_eval(sess, x, y, pred_adv_recon, x_t, adv_inputs, adv_input_y, adv_input_targets, args=eval_params_cls)
+    #noise, d1, d2, dist_diff, avg_dist_lat = model_eval_ae(sess, x, x_t,recons, adv_inputs, adv_input_targets, adv, recon_adv,lat_orig, lat_orig_recon, args=eval_params)
+    #acc_1 = model_eval(sess, x, y, pred_adv_recon, x_t, adv_inputs, adv_target_y, adv_input_targets, args=eval_params_cls)
+    #acc_2 = model_eval(sess, x, y, pred_adv_recon, x_t, adv_inputs, adv_input_y, adv_input_targets, args=eval_params_cls)
+    noise = np.sum(np.square(adv-adv_inputs))/(np.shape(adv)[0])
+    noise = pow(noise,0.5)
+    d1 = np.sum(np.square(recon_adv-adv_inputs))/(np.shape(adv_inputs)[0])
+    d2 = np.sum(np.square(recon_adv-adv_input_targets))/(np.shape(adv_inputs)[0])
+    acc1 = (sum(np.argmax(pred_adv_recon, axis=-1)==
+                             np.argmax(adv_target_y, axis=-1)))/(np.shape(adv_target_y)[0])
+    acc2 = (sum(np.argmax(pred_adv_recon, axis=-1)==
+                             np.argmax(adv_input_y, axis=-1)))/(np.shape(adv_target_y)[0])
+
+
     print("noise: ", noise)
     print("d1: ", d1)
     print("d2: ", d2)
-    print("classifier acc_target: ", acc_1)
-    print("classifier acc_true: ", acc_2)
+    print("classifier acc_target: ", acc1)
+    print("classifier acc_true: ", acc2)
 
-  recon_adv = sess.run(recon_adv)
-  recon_orig = sess.run(recon_orig)
+  #recon_adv = sess.run(recon_adv)
+  #recon_orig = sess.run(recon_orig)
   #print("recon_adv[0]\n", recon_adv[0,:,:,0])
   curr_class = 0
   if viz_enabled:
@@ -404,23 +419,25 @@ def mnist_tutorial_cw(train_start=0, train_end=60000, test_start=0,
                        **cw_params)
     
     #print("shaep of adv: ", np.shape(adv))
-    recon_orig = model_adv_trained.get_layer(adv_inputs, 'RECON')
-    recon_adv = model_adv_trained.get_layer(adv_2, 'RECON')
+    recon_orig_2 = model_adv_trained.get_layer(adv_inputs, 'RECON')
+    recon_adv_2 = model_adv_trained.get_layer(adv_2, 'RECON')
     lat_orig = model_adv_trained.get_layer(x, 'LATENT')
     lat_orig_recon = model_adv_trained.get_layer(recons, 'LATENT')
-    pred_adv_recon = cl_model.get_layer(recon_adv, 'LOGITS')
+    pred_adv_recon_2 = cl_model.get_layer(recon_adv, 'LOGITS')
+    
+    recon_adv_2 = sess.run(recon_adv_2)
+    pred_adv_recon_2 = sess.run(pred_adv_recon_2)
 
     #eval_params = {'batch_size': np.minimum(nb_classes, source_samples)}
     eval_params = {'batch_size': 90}
     if targeted:
       #noise, d1, d2, dist_diff, avg_dist_lat = model_eval_ae(sess, x, x_t,recons, adv_inputs, adv_input_targets, adv_2, recon_adv,lat_orig, lat_orig_recon, args=eval_params)
-      noise = np.sum(np.square(adv-adv_inputs))
-      d1 = np.sum(np.square(recon_adv-adv_inputs))
-      d2 = np.sum(np.square(recon_adv-adv_input_targets))
-      acc1 = (np.equal(np.argmax(pred_adv_recon, axis=-1),
-                             tf.argmax(adv_target_y, axis=-1)))/(np.shape(adv_target_y)[0]*1.0)
-      acc2 = (np.equal(np.argmax(pred_adv_recon, axis=-1),
-                             tf.argmax(adv_input_y, axis=-1)))/(np.shape(adv_target_y)[0]*1.0)
+      noise = np.sum(np.square(adv_2-adv_inputs))/len(adv_inputs)
+      noise = pow(noise,0.5)
+      d1 = np.sum(np.square(recon_adv_2-adv_inputs))/len(adv_inputs)
+      d2 = np.sum(np.square(recon_adv_2-adv_input_targets))/len(adv_inputs)
+      acc1 = (sum(np.argmax(pred_adv_recon_2, axis=-1)==np.argmax(adv_target_y, axis=-1)))/len(adv_inputs)
+      acc2 = (sum(np.argmax(pred_adv_recon_2, axis=-1)==np.argmax(adv_input_y, axis=-1)))/len(adv_inputs)
 
       #acc = model_eval(sess, x, y, pred_adv_recon, x_t, adv_inputs, adv_target_y, adv_input_targets, args=eval_params_cls)
       print("noise: ", noise)
@@ -431,7 +448,7 @@ def mnist_tutorial_cw(train_start=0, train_end=60000, test_start=0,
       print("classifier acc_target: ", acc1)
       print("classifier acc_true: ", acc2)
 
-    recon_adv = sess.run(recon_adv)
+    #recon_adv = sess.run(recon_adv)
     recon_orig = sess.run(recon_orig)
     #print("recon_adv[0]\n", recon_adv[0,:,:,0])
     curr_class = 0
@@ -471,7 +488,7 @@ def mnist_tutorial_cw(train_start=0, train_end=60000, test_start=0,
       _ = grid_visual(grid_viz_data)
       _ = grid_visual(grid_viz_data_1)
 
-    return report
+    #return report
 
 #binarization defense
   if(binarization_defense == True):
@@ -487,27 +504,35 @@ def mnist_tutorial_cw(train_start=0, train_end=60000, test_start=0,
       lat_orig_recon = model.get_layer(recons, 'LATENT')
       pred_adv_recon = cl_model.get_layer(recon_adv, 'LOGITS')
 
+      recon_adv = sess.run(recon_adv)
+      recon_orig = sess.run(recon_orig)
+      pred_adv_recon = sess.run(pred_adv_recon)
+
       #eval_params = {'batch_size': np.minimum(nb_classes, source_samples)}
       eval_params = {'batch_size': 90}
       if targeted:
         #noise, d1, d2, dist_diff, avg_dist_lat = model_eval_ae(sess, x, x_t,recons, adv_inputs, adv_input_targets, adv, recon_adv,lat_orig, lat_orig_recon, args=eval_params)
         #acc1 = model_eval(sess, x, y, pred_adv_recon, x_t, adv_inputs, adv_target_y, adv_input_targets, args=eval_params_cls)
         #acc2 = model_eval(sess, x, y, pred_adv_recon, x_t, adv_inputs, adv_input_y, adv_input_targets, args=eval_params_cls)
-        noise = np.sum(np.square(adv-adv_inputs))
-        d1 = np.sum(np.square(recon_adv-adv_inputs))
-        d2 = np.sum(np.square(recon_adv-adv_input_targets))
-        acc1 = (np.equal(np.argmax(pred_adv_recon, axis=-1),
-                             tf.argmax(adv_target_y, axis=-1)))/(np.shape(adv_target_y)[0]*1.0)
-        acc2 = (np.equal(np.argmax(pred_adv_recon, axis=-1),
-                             tf.argmax(adv_input_y, axis=-1)))/(np.shape(adv_target_y)[0]*1.0)
+        noise = np.sum(np.square(adv-adv_inputs))/(np.shape(adv)[0])
+        noise = pow(noise,0.5)
+        
+        d1 = np.sum(np.square(recon_adv-adv_inputs))/len(adv_inputs)
+        d2 = np.sum(np.square(recon_adv-adv_input_targets))/len(adv_inputs)
+        d_orig = np.sum(np.square(recon_orig-adv_inputs))/len(adv_inputs)
+
+        acc1 = (sum(np.argmax(pred_adv_recon, axis=-1)==
+                             np.argmax(adv_target_y, axis=-1)))/len(adv_inputs)
+        acc2 = (sum(np.argmax(pred_adv_recon, axis=-1)==
+                             np.argmax(adv_input_y, axis=-1)))/len(adv_inputs)
         print("d1: ", d1)
         print("d2: ", d2)
+        print("dorig: ", d_orig)
         print("noise: ", noise)
         print("classifier acc for target class: ", acc1)
         print("classifier acc for true class: ", acc2)
 
-      recon_adv = sess.run(recon_adv)
-      recon_orig = sess.run(recon_orig)
+      
       #print("recon_adv[0]\n", recon_adv[0,:,:,0])
       curr_class = 0
       if viz_enabled:
@@ -525,7 +550,7 @@ def mnist_tutorial_cw(train_start=0, train_end=60000, test_start=0,
                 else:
                   grid_viz_data[i,j] = recon_adv[i*(nb_classes-1) + j]
                   grid_viz_data_1[i,j] = adv[i*(nb_classes-1)+j]
-        sess.close()
+        
 
         _ = grid_visual(grid_viz_data)
         _ = grid_visual(grid_viz_data_1)
@@ -542,27 +567,31 @@ def mnist_tutorial_cw(train_start=0, train_end=60000, test_start=0,
         lat_orig_recon = model.get_layer(recons, 'LATENT')
         pred_adv_recon = cl_model.get_layer(recon_adv, 'LOGITS')
 
+        recon_adv = sess.run(recon_adv)
+        recon_orig = sess.run(recon_orig)
+        pred_adv_recon = sess.run(pred_adv_recon)
+
         #eval_params = {'batch_size': np.minimum(nb_classes, source_samples)}
         eval_params = {'batch_size': 90}
         if targeted:
           #noise, d1, d2, dist_diff, avg_dist_lat = model_eval_ae(sess, x, x_t,recons, adv_inputs, adv_input_targets, adv, recon_adv,lat_orig, lat_orig_recon, args=eval_params)
           #acc1 = model_eval(sess, x, y, pred_adv_recon, x_t, adv_inputs, adv_target_y, adv_input_targets, args=eval_params_cls)
           #acc2 = model_eval(sess, x, y, pred_adv_recon, x_t, adv_inputs, adv_input_y, adv_input_targets, args=eval_params_cls)
-          noise = np.sum(np.square(adv-adv_inputs))
-          d1 = np.sum(np.square(recon_adv-adv_inputs))
-          d2 = np.sum(np.square(recon_adv-adv_input_targets))
-          acc1 = (np.equal(np.argmax(pred_adv_recon, axis=-1),
-                             tf.argmax(adv_target_y, axis=-1)))/(np.shape(adv_target_y)[0]*1.0)
-          acc2 = (np.equal(np.argmax(pred_adv_recon, axis=-1),
-                             tf.argmax(adv_input_y, axis=-1)))/(np.shape(adv_target_y)[0]*1.0)
+          noise = np.sum(np.square(adv-adv_inputs))/(np.shape(adv)[0])
+          noise = pow(noise,0.5)
+          d1 = np.sum(np.square(recon_adv-adv_inputs))/(np.shape(adv_inputs)[0])
+          d2 = np.sum(np.square(recon_adv-adv_input_targets))/(np.shape(adv_inputs)[0])
+          acc1 = sum(np.argmax(pred_adv_recon, axis=-1)==
+                             np.argmax(adv_target_y, axis=-1))/(np.shape(adv_target_y)[0])
+          acc2 = (sum(np.argmax(pred_adv_recon, axis=-1)==
+                             np.argmax(adv_input_y, axis=-1)))/(np.shape(adv_target_y)[0])
           print("d1: ", d1)
           print("d2: ", d2)
           print("noise: ", noise)
           print("classifier acc for target class: ", acc1)
           print("classifier acc for true class: ", acc2)
 
-        recon_adv = sess.run(recon_adv)
-        recon_orig = sess.run(recon_orig)
+        
         #print("recon_adv[0]\n", recon_adv[0,:,:,0])
         curr_class = 0
         if viz_enabled:
@@ -586,7 +615,7 @@ def mnist_tutorial_cw(train_start=0, train_end=60000, test_start=0,
           _ = grid_visual(grid_viz_data_1)
 
 
-      #return report
+          return report
 
 def main(argv=None):
   from cleverhans_tutorials import check_installation

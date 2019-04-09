@@ -536,7 +536,7 @@ def cifar10_cw_recon(train_start=0, train_end=60000, test_start=0,
   }
     print("Training Adversarial AE")
     loss_2 = SquaredError(wrap_ae_adv)
-    print("layer names: "wrap_ae_adv.get_layer_names())
+    print("layer names: ",wrap_ae_adv.get_layer_names())
 
     train_ae(sess, loss_2, x_train_app, x_train_aim, evaluate=evaluate_ae,
           args=train_params, rng=rng)
@@ -557,15 +557,7 @@ def cifar10_cw_recon(train_start=0, train_end=60000, test_start=0,
     pred_adv_recon = wrap_cl.get_logits(x)
     pred_adv_recon = sess.run(pred_adv_recon, {x:recon_adv})
 
-    if targeted:
-      
-      noise = reduce_sum(tf.square(adv_inputs - adv_2), list(range(1, len(shape))))
-      print("noise: ", noise)
-    pred_adv_recon=cl_model.get_layer(recon_adv)
-    #scores1 = cl_model.evaluate(recon_adv, adv_input_y, verbose=1)
-    #scores2 = cl_model.eval_params(recon_adv, adv_target_y, verbose = 1)
-    #acc_1 = model_eval(sess, x, y, pred_adv_recon, x_t, adv_inputs, adv_target_y, adv_input_targets, args=eval_params_cls)
-    #acc_2 = model_eval(sess, x, y, pred_adv_recon, x_t, adv_inputs, adv_input_y, adv_input_targets, args=eval_params_cls)
+  
     noise = np.sum(np.square(adv-adv_inputs))/(np.shape(adv)[0])
     noise = pow(noise,0.5)
     d1 = np.sum(np.square(recon_adv-adv_inputs))/(np.shape(adv_inputs)[0])
