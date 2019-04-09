@@ -171,6 +171,9 @@ class CrossEntropy(Loss):
                                                       y.dtype)))
 
     logits = [self.model.get_logits(x, **kwargs) for x in x]
+    print("type of y: ", type(y))
+    print("type of logits: ", type(logits[0]))
+    print()
     loss = sum(
         coeff * tf.reduce_mean(softmax_cross_entropy_with_logits(labels=y,
                                                                  logits=logit))
@@ -193,6 +196,7 @@ class vae_loss(Loss):
 
     # Flatten for the losses
     generated_flat = tf.contrib.layers.flatten(generated_images)
+
     latent_loss = -.5 * tf.reduce_sum(1. + z_v - tf.pow(z_m, 2) - tf.exp(z_v), 
                                         reduction_indices=1)
     # Compute reconstruction loss
