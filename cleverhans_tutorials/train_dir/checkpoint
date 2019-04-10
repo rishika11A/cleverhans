@@ -1,2 +1,2 @@
-model_checkpoint_path: "model_cnn_cl.ckpt"
-all_model_checkpoint_paths: "model_cnn_cl.ckpt"
+model_checkpoint_path: "model_cnn_cl_fgsm.ckpt"
+all_model_checkpoint_paths: "model_cnn_cl_fgsm.ckpt"
